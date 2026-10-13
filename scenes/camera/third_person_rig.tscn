@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/third_person_camera.gd" id="1_camera"]
+
+[sub_resource type="SphereShape3D" id="CameraSweep"]
+radius = 0.15
+
+[node name="ThirdPersonRig" type="Node3D"]
+process_physics_priority = 10
+script = ExtResource("1_camera")
+
+[node name="PitchPivot" type="Node3D" parent="."]
+
+[node name="SpringArm3D" type="SpringArm3D" parent="PitchPivot"]
+process_physics_priority = 20
+rotation = Vector3(0, 0.380506377, 0)
+spring_length = 2.6925824
+margin = 0.1
+shape = SubResource("CameraSweep")
+
+[node name="Camera3D" type="Camera3D" parent="PitchPivot/SpringArm3D"]
+position = Vector3(0, 0, 2.6925824)
+rotation = Vector3(0, -0.380506377, 0)
+current = true
+projection = 0
+fov = 70.0
+near = 0.08
+far = 50.0

@@ -1,0 +1,69 @@
+[gd_scene load_steps=7 format=3]
+
+[sub_resource type="StandardMaterial3D" id="HiltMaterial"]
+albedo_color = Color(0.17, 0.2, 0.25, 1)
+metallic = 0.5
+roughness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="BarrelMaterial"]
+albedo_color = Color(0.65, 0.7, 0.76, 1)
+metallic = 0.5
+roughness = 0.45
+
+[sub_resource type="StandardMaterial3D" id="BladeMaterial"]
+shading_mode = 0
+albedo_color = Color(0.15, 0.85, 1, 1)
+emission_enabled = true
+emission = Color(0.15, 0.85, 1, 1)
+
+[sub_resource type="CylinderMesh" id="HiltMesh"]
+material = SubResource("HiltMaterial")
+top_radius = 0.025
+bottom_radius = 0.025
+height = 0.2
+radial_segments = 24
+
+[sub_resource type="CylinderMesh" id="BarrelMesh"]
+material = SubResource("BarrelMaterial")
+top_radius = 0.018
+bottom_radius = 0.018
+height = 0.15
+radial_segments = 24
+
+[sub_resource type="CylinderMesh" id="BladeMesh"]
+material = SubResource("BladeMaterial")
+top_radius = 0.012
+bottom_radius = 0.012
+height = 1.0
+radial_segments = 16
+
+[node name="Gunblade" type="Node3D"]
+metadata/coordinate_convention = "Grip origin at hand center; hilt bottom Y=-0.07, top Y=0.13; blade +Y; barrel and muzzle forward -Z. One unit = one meter."
+
+[node name="Hilt" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.03, 0)
+mesh = SubResource("HiltMesh")
+
+[node name="Barrel" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.09, -0.075)
+rotation = Vector3(-1.57079632679, 0, 0)
+mesh = SubResource("BarrelMesh")
+
+[node name="Blade" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.63, 0)
+mesh = SubResource("BladeMesh")
+cast_shadow = 0
+
+[node name="Grip" type="Marker3D" parent="."]
+
+[node name="HiltBottom" type="Marker3D" parent="."]
+position = Vector3(0, -0.07, 0)
+
+[node name="Muzzle" type="Marker3D" parent="."]
+position = Vector3(0, 0.09, -0.15)
+
+[node name="BladeBase" type="Marker3D" parent="."]
+position = Vector3(0, 0.13, 0)
+
+[node name="BladeTip" type="Marker3D" parent="."]
+position = Vector3(0, 1.13, 0)

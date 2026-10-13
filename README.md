@@ -1,231 +1,459 @@
 # Blaster-Saber-Godot-Demo
 
-Godot 第三人称电影式枪剑战斗实验原型。当前处于 **Stage 0：现状检查与设计讨论，尚未最终验收**，尚无可玩的场景。Stage 1 计划未获最终批准；操作方式、战斗机制和动作系统仍在讨论。本文明确区分已确认设计、候选方案、开放问题与实际实现，设计目标不代表已实现功能。
+A Godot third-person cinematic gunblade combat prototype. **Stage 0 has not received final acceptance. Stage 1 static rendering has been manually accepted, and basic movement plus the right-shoulder third-person camera are now authorized and implemented.** Controls and camera feel await manual acceptance. Stage 2 and combat remain unapproved and unimplemented. This document distinguishes confirmed rules, provisional parameters, future implementation ideas, unresolved questions, and actual implementation. Combat design decisions are not implemented features.
 
-## Project Vision — 项目愿景
+## Project Vision
 
-探索以连续武器交锋为核心的动作体验，参考《星球大战》前传高速光剑对决中的进攻、试探、格挡和压力变化。
+Explore continuous weapon exchanges inspired by the fast lightsaber duels of the Star Wars prequels: attacks, probes, parries, and changing pressure.
 
-动作主要参考单手西洋佩剑（Sabre），结合 Rapier / Épée 的刺击、试探与距离控制，以及能量剑刃的伸缩和接触特性。强调快速刺击、小幅切割、剑尖试探、手腕变线、抖剑与佯攻，同时保留适当的大幅斩击、格挡、偏转、压剑和拼刀；不要求严格历史剑术模拟或现实击剑比赛规则。
+The main motion reference is one-handed Sabre, combined with Rapier / Épée thrusts, probing, distance control, and energy-blade contact and extension. Fast thrusts, small cuts, tip probes, wrist changes, feints, occasional broad cuts, deflections, presses, and clashes are relevant. This is not strict historical fencing or competition simulation. Probing and feints remain movement references but are deferred from the first enemy AI scope.
 
-能量剑刃近乎没有质量，无需主要依赖大幅挥动积累动能，但轻微接触也可能造成严重伤害。因此动作重点是 **精确性、距离、角度、时机与连续性**，不把所有攻击限定为刺击，也不禁止大幅斩击。
+The blade has almost no mass and need not depend on broad swings to build momentum, while even light contact can cause serious injury. **Precision, distance, angle, timing, and continuity** matter more than swing power. Neither thrust-only attacks nor a ban on broad cuts is intended.
 
-**玩家决定做什么，角色决定如何完成动作。** 玩家通过输入表达战斗意图，角色在距离、武器位置和当前动作约束下选择执行方式。首要目标是验证一个可信、可读、可操控的最小双向交锋场景；叙事、对峙与冲突升级属于长期方向，暂不开发。
+**The player decides what to do; the character decides how to execute it.** Inputs express intent; execution considers distance, weapon position, and current motion. The immediate goal is a credible, readable, controllable exchange between two opponents. Narrative confrontation and escalation remain longer-term directions.
 
-## Core Design Principles — 核心原则
+## Core Design Principles
 
-- **Intent-Driven Combat：** 输入表达攻击、防御、闪避或射击意图，不要求每次播放同一动画。距离之外如何表达攻击意图仍需试验。
-- **Continuous Combat：** 动作尽量从当前姿态衔接；接触后的武器位置应影响下一次动作，不强制每次回到待机。
-- **Player Agency：** 玩家角色不得擅自攻击、反击、闪避、追击或使用能力。允许探索真实攻击即将命中时最低限度的本能防御，但触发条件和限制未定，不能自动衍生战术行为。
-- **Meaningful Weapon Contact：** 格挡与拼刀需要改变后续交锋，而不仅是火花特效。先验证预设动作、空间检测和程序化对齐的混合方案，不以完整刚体模拟为前提。
-- **真实交锋结果：** 不保证每次攻击都被挡住，也不强制双方拼刀固定次数后才允许产生结果。成功制造破绽可以直接命中，判断错误应当存在实际后果；电影化表现不能抹除这些结果。
-- **动作优先级：** 可读性 > 连贯性 > 表现力 > 人体真实性。电影化镜头不得妨碍玩家判断位置、攻击方向和自身状态。
-- **工程范围：** 优先 GDScript 与 Godot 原生节点。逻辑、表现、检测、特效和镜头保持清晰职责，但不预建通用战斗框架、完整状态机、能力系统、AI 框架、RPG 数值、事件总线或大型招式数据库。动作不全部视为固定动画，也不假设必须使用复杂物理剑术模拟。
+- **Intent-Driven Combat:** Inputs request attacks, defense, dodges, or shots rather than always playing the same animation. Out-of-range behavior still needs validation.
+- **Continuous Combat:** Transition from current poses where possible. Contact should affect subsequent weapon positions rather than force a return to idle.
+- **Player Agency:** The player chooses attacks, defense, dodges, shots, blade toggles, and Force abilities. Execution must not autonomously choose attacks, counters, pursuit, dodges, or abilities. Limited instinctive interception is a costly defensive exception, not authorization for new tactics.
+- **Meaningful Weapon Contact:** Parries and clashes affect subsequent exchanges. Authored motion, spatial detection, and procedural alignment are a starting direction; full rigid-body fencing is not required.
+- **Real Outcomes:** Not every attack must be blocked, and no fixed clash count is required before a hit. Openings can lead directly to hits; mistakes have consequences.
+- **Pacing:** Do not assume Souls-like pacing, rhythm-game parrying, or noninteractive automatic clash sequences.
+- **Motion Priorities:** Readability > continuity > expressiveness > anatomical realism. Cinematic presentation must preserve awareness of threats, positions, and player state.
+- **Engineering Scope:** Prefer GDScript and native Godot nodes. Separate responsibilities without prebuilding general combat, state-machine, ability, AI, RPG, event-bus, or large move-database frameworks. Neither fixed animations for every action nor complex physical sword simulation is mandatory.
 
-## Confirmed Decisions — 已确认设计
+## Confirmed Decisions
 
-- 使用 Godot；灰盒角色为一个竖直圆柱身体与两只球形手，不需要四肢、蒙皮或 Skeleton3D。
-- 角色逻辑与视觉节点分开组织，以便未来替换表现层，不提前建设骨骼兼容框架。
-- 枪剑由竖直主体圆柱、横向枪管圆柱和上端能量剑刃构成，普通情况下单手持剑。尺寸参考见下表，允许灰盒阶段微调视觉比例。
-- 剑术与射击不采用互斥模式。竖持或斜持时可直接快速开枪，类似牛仔式快速射击；只有精确瞄准时才明显调整姿态，将横向枪管对准目标。快速射击表现应与武器姿态、真实枪口方向和动作稳定性有可理解的关系。
-- 初版射击可采用 Hitscan，必须区分意图目标、真实枪口方向和最终命中位置，不能视觉朝向错误却无条件命中目标。
-- Sword Trail 为独立视觉效果，记录剑根和剑尖轨迹生成拖尾，不参与攻击判定，也不只依赖 Motion Blur。
-- 能量剑刃使用简单网格与材质；Glow、抗锯齿和镜头效果逐步实验，不以修改引擎渲染器为前置条件。
+Subsections explicitly label provisional values and unfinished details alongside confirmed rules.
 
-### 角色与枪剑尺寸
+- Greybox actors use one vertical body cylinder and two spherical hands, without limbs, skinning, or a required Skeleton3D.
+- Separate actor logic from visual nodes for later presentation replacement, without building a skeletal compatibility framework now.
+- The gunblade uses a vertical body cylinder, transverse barrel cylinder, and energy blade, primarily held in one hand. Dimensions below are adjustable visual references.
+- Sword use and gunfire are not mutually exclusive modes. Quick shots can occur with the blade vertical or angled. Precise aiming would explicitly align the barrel, but hold-to-aim is currently deferred. Quick shots must relate intelligibly to pose, actual muzzle direction, and stability.
+- Hitscan is an acceptable initial approach. Distinguish intended target, actual muzzle direction, and hit position; do not guarantee hits while the muzzle points elsewhere.
+- Sword Trail is a separate visual effect based on blade-root/tip history. It does not perform hit detection or rely solely on Motion Blur.
+- Use simple blade geometry/materials. Explore Glow, anti-aliasing, and camera effects incrementally; engine renderer modification is not a prerequisite.
 
-若采用米制世界比例，1 世界单位对应约 1 米。以下是当前设计参考值，不是已经建好的模型尺寸；旧的粗略比例已由这些尺寸替代。
+### Actor and Gunblade Dimensions
 
-| 部分 | 参考尺寸 | 米制世界比例 |
+With metric scale, one world unit is approximately one meter. These design references replace the original rough proportions and are now represented by the Step 1 static greybox scenes. Visual proportions still require manual acceptance.
+
+| Part | Reference | World units |
 | --- | --- | --- |
-| 角色身高 | 约 170 cm | 约 1.7 单位 |
-| 剑柄／枪剑主体长度 | 约 20 cm | 约 0.20 单位 |
-| 横向枪管长度 | 约 15 cm | 约 0.15 单位 |
-| 枪管安装位置 | 距剑柄底部约 16 cm | 约 0.16 单位 |
-| 能量剑刃长度 | 尚未确定 | 待讨论 |
+| Actor height | Approximately 170 cm | 1.7 |
+| Hilt / gunblade body length | Approximately 20 cm | 0.20 |
+| Transverse barrel length | Approximately 15 cm | 0.15 |
+| Barrel mounting position | Approximately 16 cm above hilt bottom | 0.16 |
+| Energy blade length | Approximately 1 m, primarily one-handed | 1.0 |
 
-枪管右侧有细长辅助瞄准结构，第一版灰盒不建模。保留枪管相对剑柄的位置与朝向，并明确枪口标记，避免射击动作与真实枪口方向不一致。
+A slender aiming aid on the barrel's right side is omitted from the first greybox. Preserve the barrel's position/orientation relative to the hilt and identify the muzzle clearly.
 
-### 剑刃接触与力矩
+### Blade Contact and Torque
 
-能量剑刃虽然近乎无质量，仍可与其他武器有效接触，并把外部作用力传递到剑柄。接触点远离握持位置时，较长力臂可能产生更大力矩，导致手腕被迫旋转、剑刃变向、防御姿态受破坏、武器控制下降，严重时可能缴械。
+A nearly massless blade can still contact weapons and transmit forces to the hilt. Contact farther from the grip can create a larger moment, rotating the wrist, redirecting the blade, disrupting defense, reducing control, or potentially causing disarm.
 
-结果取决于接触方向、作用力、握持状态与双方动作，不能规定击中剑尖就必然缴械。初期可用抽象接触判定和程序化动作反馈表达，不要求完整物理力矩模拟；具体判定规则仍开放。
+Results depend on direction, force, grip, and both actors' motions; a tip hit does not guarantee disarm. Abstract resolution and procedural feedback may express this initially. Detailed contact physics, complex pressing animations, and specific Sword Art movements remain unresolved; the sword system as a whole is not finalized.
 
-### Blade Extension Toggle — 剑刃伸缩
+### Blade Extension Toggle
 
-剑刃可由玩家主动开启或关闭，**R2 / RT 按一次切换状态**：已开启时关闭，再按重新开启，不采用按住收刃、松开自动出刃。
+**R2 / RT toggles on each press**, not hold-to-retract with automatic extension on release.
 
-收刃是主动改变接触关系的战术行为：敌人准备压剑或击刃时，预期接触和阻力突然消失；若其已经投入较大力量或身体动量，可能过度伸展、失衡或暴露破绽。玩家可重新出刃并主动尝试攻击，但收刃不保证敌人失衡；轻微试探或及时调整可能不产生明显优势。
+Outside Bind, retraction removes expected contact/resistance. A committed opponent may overextend or expose an opening; light probing or timely adjustment may produce no advantage. Retraction does not guarantee stagger. The player decides whether to reignite and attack.
 
-必须保留交锋中主动收刃的设计可能性。初始开关状态、伸缩速度、允许切换的动作及接触判定变化时点尚未确定。
+During Bind, the player may press R2 / RT to retract deliberately, removing the resistance supporting the enemy blade and immediately changing the weapons' motion relationship. Current motion, relative position, enemy blade trajectory, and retraction timing determine the result, without a random success/failure roll: if the continuing attack hits, the player suffers serious injury; if loss of blade support makes it miss, the enemy loses balance and falls, giving the player a direct execution opportunity. This is a high-risk, high-reward tactic, not a penalty-free QTE cancel, and is separate from ordinary Bind QTE victory/defeat. Trajectory detection, action windows, fall animation, execution input and timing remain open, as do initial blade state, permission during other actions, and collision activation/deactivation timing.
 
-### Force Block — 原力格挡
+Ignition should resemble flame-like emission followed by magnetic straightening. Candidate timings: 0.1–0.3 seconds for emission, another 0.2–0.3 seconds for straightening, and about 0.2 seconds for retraction. These are not final specifications. L2 assistance during Bind is confirmed below, with cost and pressure benefit unresolved.
 
-**L2 / LT** 对敌方武器施加运动约束，阻止它继续沿当前攻击方向推进；不是时间停止，也不是冻结整个敌人。例如下斩被阻挡后，敌人仍可移动身体、改变持剑姿态、变向、上提或回抽尝试脱离，类似刀刃砍入木头后需改变方向退出。
+### Force Block
 
-核心价值是突然增加武器运动阻力，打乱攻击节奏。及时反应的敌人可能脱离并重新组织进攻，反应不及时则可能短暂暴露破绽；不保证失衡或免费反击。
+**Hold L2 / LT** to constrain the targeted enemy weapon's forward attack motion, without freezing time or the enemy's body. The enemy can move, change pose, retract, lift, or redirect to escape, like withdrawing a blade stuck in wood.
 
-收刃撤销预期接触，原力格挡施加原本不存在的阻力，两者机制不同，均需根据交锋情境判定结果。持续方式、与普通格挡的兼容、资源消耗、适用攻击、脱离规则、持续时间和范围尚未确定。除这里讨论的原力格挡外，不提前扩展其他特殊能力。
+Releasing L2 ends the constraint. After escape, continued holding does not automatically reapply it; release and press again are required. Recognizing escape after approximately one second is a candidate behavior. Range, eligible attacks, and exact escape detection remain open.
 
-### Controller Layout & Input Permissions — 手柄布局与输入权限
+Force Block adds unexpected resistance; retraction removes expected contact. Neither guarantees stagger or a free counterattack. Against multiple enemies or dual-wielded weapons, L1 can defend against other actual threats while the left hand uses Force Block. The right hand can also recall the gunblade while L2 is active. Bind itself is disabled in multi-participant combat.
 
-以下是当前主要输入设计方向，以 DualSense 为主并标注 Xbox 对应按键。它是设计约束，**尚未创建 Input Map**；按键用途与尚未确定的持续、切换、取消和并发语义分开讨论。摇杆移动与 L3/R3 按下是不同输入。
+### Ordinary Melee and Gunfire
 
-| PlayStation | Xbox | 功能 |
+**□ / X requests one ordinary attack per accepted press.** Each animation has a short lockout/attack window, provisionally 0.2–0.3 seconds. Presses during it are completely ignored, without buffering. Afterward, a new press can interrupt the remaining animation and transition to another attack. Timing is per-animation, not a global cooldown; autoclicking cannot exceed the permitted rate.
+
+Use a small number of ordinary motion pools; avoiding excessive group repetition is a future improvement. Initial greybox work does not need detailed selection. Parry motion should match the attack/response. Blend transitions without teleporting the weapon. Godot animation blending is a candidate starting point; add trajectory work only if testing reveals problems.
+
+The current out-of-range fallback idea is an ordinary empty-space attack without autonomous pursuit. Taunt behavior/input remain unresolved. Dodge outranks ordinary attacks for interruption; L1 may interrupt attacks but has lower priority than dodge. Full arbitration remains unspecified.
+
+**△ / Y fires one shot.** Motion adapts to blade/arm pose, using vertical- or horizontal-blade shooting poses as appropriate. A swing may lead into a derived shot based on arm/elbow pose; this does not require anatomical arms in the greybox.
+
+Gunfire and melee are generally sequential; inputs during the other action may execute after its short action completes. Queue/ignore boundaries remain unresolved and must not override ordinary-melee lockout's no-buffer rule. Fluid gun/sword transitions are allowed in principle; the prototype needs no separate transition animation for every combination. Special derived attacks remain unspecified. **Holding the shoot button to enter precise aim is deferred.** All shots respect actual muzzle orientation.
+
+### Three Defensive Behaviors and the Posture/Stamina Resource
+
+The final name is undecided; use **posture/stamina resource** for now. The following are design rules, not implementation.
+
+| Defense | Trigger and motion | Outcome |
 | --- | --- | --- |
-| 左摇杆 | Left Stick | 角色移动 |
-| L3 | LS Click | 走路／跑步切换，按一次切换状态 |
-| 右摇杆 | Right Stick | 镜头控制 |
-| R3 | RS Click | 交互 |
-| ✕ | A | 跳跃，或根据环境攀爬／翻越 |
-| L1 | LB | 普通剑术格挡 |
-| L2 | LT | 原力格挡 |
-| R1 | RB | 进入能力操作模式 |
-| R2 | RT | 剑刃开启／关闭，按一次切换状态 |
-| □ | X | 近战攻击意图 |
-| △ | Y | 远程攻击意图 |
-| ○ | B | 闪避意图 |
-| 方向键 ↑↓←→ | D-Pad ↑↓←→ | 四种对话／交流选项 |
+| Precisely timed parry | Press L1 before an incoming attack; matching motion. Candidate window 0.25–0.3 seconds, potentially scaled per attack | No player resource cost on success; increased enemy resource loss and possible enemy stagger |
+| Held defense | Hold L1 in a defensive pose; respond to real attacks without meaningless repeated blocks | Absorbs without HP damage but costs resource; no equivalent precise-parry enemy penalty; depletion immediately breaks guard |
+| Instinctive defense | Without L1, pre-trigger resource must be greater than zero; full payment of the coming cost is not required. May interrupt the current attack | Absorbs without HP damage, costs substantial resource, and normally causes baseline stumble. Depletion still absorbs this hit, then immediately causes guard-break stagger. Unavailable at zero or during an uninterruptible Stagger / Knockback hit reaction; held defense is also unavailable during that reaction, leaving subsequent hits dangerous |
 
-R1 / RB 能力模式下，✕、○、□、△ 暂时对应不同原力或其他能力。R1 是按住还是切换、面键能力内容、是否影响 L1/L2/R2、能否与战斗动作并行均待确认，不提前创建完整能力系统或其输入映射。
+Resource does not passively drain to zero. Relevant incoming attacks/defensive pressure reduce it; breathing during periods without parrying or automatic interception restores it. When defense reaches zero or below, absorb that hit, immediately enter guard-break stagger, and clamp stored/displayed resource at zero. `10 - 10` and `0.1 - 1000` yield the same guard-break state; overkill does not change the result. Subsequent attacks create the danger.
 
-当前权限方向是：非战斗情境禁用普通攻击、远程攻击、格挡、闪避和战斗能力，保留移动、镜头、走跑切换、交互、跳跃与环境攀爬，以及适当情境下的对话选择。但非战斗不等于武器一定收起，也不等于拔剑才进入交战；未来对话、威慑、拔枪对峙、快速拔剑和正式交战可能有不同权限。不要预先以永久固定的 `is_in_combat` 布尔值定义全部权限；具体状态与权限模型仍开放，探索时剑刃切换权限也需确认。
+The existing resource probabilities remain unchanged. Applicable events and sampling before/after deduction are unresolved. Knockback and disarm can occur together; knockback distance does not scale with resource. Weapon Durability separately influences enemy disarm probability; no combination formula is selected.
 
-## Candidate Approaches & Design Risks — 候选方案与设计风险
-
-### 高速动作与玩家决策频率
-
-这是重要的未解决问题。每次接触都要求独立按键格挡，可能迫使敌人减速，形成等待提示、按键弹刀的循环；自动连续防住所有高速攻击，又可能让一次进攻输入触发整段自主剑斗，削弱控制感。
-
-候选思路是 **动作频率可以高于独立决策频率**：当玩家明确表达持续防御意图时，角色可执行多次合理调整与偏转，但只能是该意图的执行细节。这不是已批准的机制，也不意味着 L1 的持续方式已经确定。
-
-| 允许探索的当前意图执行细节 | 不得未经玩家授权的新战术 |
-| --- | --- |
-| 手腕调整、剑尖变向、小幅持剑姿态变化 | 主动反击或发动新攻击 |
-| 当前防御意图所需的连续偏转 | 主动追击或闪避 |
-| 根据接触结果调整武器位置 | 自行使用原力或其他特殊能力 |
-
-需验证高速接触是否仍可读、动作是否能追溯到当前玩家意图、停止或改变输入时角色如何响应，以及是否形成过度自动防御。自动动作不能成为保证无伤或保证拼刀的演出规则。
-
-### 本能防御与攻防主导权
-
-本能防御仍是有限例外的探索方向，不是无成本自动格挡。真实攻击即将命中时，最低限度抬剑可能中断玩家攻击、使武器被打偏、失去进攻机会或暂时受压制；这些是候选后果，触发条件、成功率、方向限制和具体代价均未定。它不能顺带连续反击，也不能保证玩家永远不受伤。
-
-可探索由当前意图决定行为优先级：明确防御时主要执行防御，进攻时寻找合理攻击路径，原力格挡时尝试约束武器，主动收刃时改变接触关系。但同时输入如何仲裁、动作是否可取消、何时改变主导行为仍需讨论，不据此确定完整状态机。
-
-## Current Implementation — 实际实现
-
-首次检查日期：2026-10-13。以下保留上一轮仓库检查和本机命令结果，未根据设计说明推断功能存在。本次更新仅维护 README，未新增实现，也未重跑引擎测试。
-
-| 项目 | 检查结果 |
-| --- | --- |
-| 项目文件 | 已有 `project.godot`，配置格式 `config_version=5`；这是配置格式编号，不是引擎主版本 |
-| 本机引擎 | `--version` 返回 `4.7.2.stable.steam.ed1daf0bf` |
-| 项目版本标记 | `config/features` 为 `4.7`、`Forward Plus` |
-| 应用名称 | 当前为 `Wuwaproject`；是否改名待确认 |
-| 渲染与物理配置 | Forward Plus；Windows 渲染驱动 `d3d12`；3D 物理 `Jolt Physics`。仅确认配置，未验收图形运行效果 |
-| 场景与脚本 | 无 `.tscn`、`.scn`、`.gd` 或 C# 脚本，无主场景 |
-| 资源 | 默认 `icon.svg` 与导入描述；无角色、武器、动画、Shader 或其他游戏资源 |
-| 输入与系统 | 无自定义 `[input]`，无 Autoload、插件、战斗状态、动画系统、AI、武器检测、射击、镜头或拖尾实现 |
-| 测试与导出 | 无测试基础设施、CI 或导出预设 |
-| 工程辅助文件 | 已有 Git 仓库、`.editorconfig`、`.gitattributes`、`.gitignore`；检查前工作区干净 |
-| 本地缓存 | 有 `.godot/` 编辑器与导入缓存，已被 Git 忽略，不属于游戏实现 |
-
-### 上一轮已执行验证（本轮未重跑）
-
-- 本机引擎版本查询成功。
-- `--headless --editor --import --quit` 成功，输出无错误。
-- `--headless --quit` 报告 `Can't run project: no main scene defined in the project.`，确认当前不能启动游戏。该命令返回码为 0，不能单凭返回码判断成功。
-- 初次沙箱内检查存在编辑器数据目录写入错误；获准在沙箱外重跑后，导入正常，启动检查只报告缺少主场景。
-- 本地日志：`.godot/inspection-import.log`、`.godot/inspection-run.log`，均为不提交的缓存文件。
-- 无脚本和场景可做逻辑或资源加载测试；无界面导入成功不代表镜头、动作、渲染或游戏手感正确。图形界面启动尚未验收。
-
-## Planned Prototype Stages — 原型阶段
-
-各阶段都是规划，Stage 0 尚未最终验收，Stage 1–6 尚未实现。先继续讨论操作流程、攻击意图、格挡响应、动作衔接和敌人行为，待范围足够清晰且计划获批后再开发。后续每阶段完成验证再扩展，顺序可按实测调整，不一次实现全部内容。
-
-| 阶段 | 最小范围 | 验证门槛 |
+| Event | Resource ≥50% | Resource falling from 50% to zero |
 | --- | --- | --- |
-| Stage 0 — Project Inspection & Design Discussion | 保留检查结果，维护 README，讨论机制与实施范围 | 设计讨论进行中，未最终验收；文档更新不代表通过 |
-| Stage 1 — Greybox Foundation | 待确认：场地、约 1.7 单位角色、球形手、参考尺寸枪剑、移动、第三人称镜头、静态目标 | 场景可启动，比例与单手握持可读，移动和镜头可用；不扩大为完整手柄或战斗实现 |
-| Stage 2 — Weapon Motion | 单手持剑、少量刺击／切割、格挡与射击姿态的程序化过渡；获确认后试验剑刃伸缩表现 | 轨迹可控，姿态连续，枪口朝向合理；伸缩表现不等同战术判定，未定切换语义先讨论 |
-| Stage 3 — Visual Effects | 剑刃材质、Glow 实验、基础拖尾、接触反馈 | 拖尾跟随真实武器且与判定独立，高速运动清晰；接触反馈依托测试接触事件 |
-| Stage 4 — Basic Combat Exchange | 一个少量可读攻防行为的敌人、双向检测与接触响应；探索接触方向、力臂及姿态反馈 | 接触影响后续动作且不保证拼刀；检验高速动作与决策频率的候选平衡，不搭建通用 AI 或完整物理模拟；可与 Stage 3 小幅交错 |
-| Stage 5 — Contextual Combat | 距离／姿态选招、格挡衔接、快速射击与失衡；规则确认后探索收刃改变接触、原力格挡增加阻力及有限本能防御 | 自主执行服从玩家意图，射击方向可信；收刃与原力格挡不保证失衡或免费反击；按情境验证输入权限、并发与取消，不扩展完整能力系统 |
-| Stage 6 — Cinematic Presentation | 动态构图、震动、慢动作与关键演出 | 表现增强且保持控制和战况可读性 |
+| Additional knockback | 20% chance | Linear increase to 80% |
+| Base resource-driven disarm | 0% chance | Linear increase to 60% |
 
-### Stage 1 实施方案（未最终批准，尚未创建文件）
+These are current balancing parameters. Keep the following triggers distinct even if some animations are shared:
 
-目标：一个平坦测试场内，玩家操控灰盒角色移动并环视静态敌人，两者使用相同圆柱与球形手结构，武器以单手握持展示。保持原有最小范围，不添加战斗、射击、闪避、自动追敌、剑刃战术伸缩、原力格挡、能力模式或完整探索／对话功能。角色与枪剑采用上文尺寸参考；剑刃长度仍需讨论，静态展示不决定游戏默认开关状态。
-
-下列是未来计划文件，不是本轮创建清单。手柄布局和情境权限是后续实现约束，不将整张布局表提前变成 Input Map；Stage 1 的最小移动／镜头测试输入仍需确认。
-
-| 创建或修改文件 | 职责 |
+| Outcome | Trigger |
 | --- | --- |
-| 修改 `project.godot` | 获批后设置测试场为主场景，添加经确认的最小移动／镜头测试输入；不预建战斗、能力或情境权限映射 |
-| 创建 `scenes/test_arena.tscn` | 地面及碰撞、基础灯光、环境、玩家、静态目标、镜头；提供距离和比例参照 |
-| 创建 `scenes/actors/greybox_actor.tscn` | `CharacterBody3D` 与碰撞体，独立 `VisualRoot`、圆柱身体、左右手节点；右手实例化枪剑。静态目标复用同一场景但不挂玩家控制脚本 |
-| 创建 `scenes/weapons/gunblade.tscn` | 两个实体圆柱和剑刃网格，明确握持原点、`Muzzle`、`BladeBase`、`BladeTip` 标记；不承担战斗逻辑 |
-| 创建 `scripts/player_controller.gd` | 仅挂在玩家实例；读取移动输入，执行相对镜头的地面移动、重力、碰撞和朝向更新，不添加通用意图管理器 |
-| 创建 `scenes/camera/third_person_rig.tscn` | 跟随支点、俯仰节点、`SpringArm3D` 与 `Camera3D`；镜头探测排除玩家碰撞体 |
-| 创建 `scripts/third_person_camera.gd` | 跟随、环视、俯仰限制；若采用键鼠测试则处理鼠标捕获与释放；无锁定和演出切镜 |
-| 创建 `tests/smoke_test.gd` | 最小 `SceneTree` 无界面测试，加载并实例化场地，核对角色、镜头、武器标记与输入动作；仅检查资源和结构，不模拟视觉验收 |
-| 更新 `README.md` | 记录最终坐标约定、操作方式、实现状态与实际测试结果 |
+| Baseline instinctive-defense stumble | Normal instinctive-defense consequence; does not require zero resource or a knockback roll |
+| Zero-resource guard-break stagger | Immediate defense depletion to zero/below, independent of defense type or knockback probability |
+| Additional probabilistic knockback | Resource-based probability; applicable events/sampling remain open; does not replace either stumble or guard-break stagger |
 
-建议坐标约定（未最终确认）：世界 Y 向上，角色前向 -Z，地面为 Y=0，采用米制比例；角色高约 1.7、主体长约 0.20、枪管长约 0.15、安装点距主体底部约 0.16 世界单位。武器局部 +Y 沿主体与剑刃，枪管局部 -Z 朝枪口，明确握持原点与剑柄底部的相对位置。手间距、视觉比例和镜头距离在灰盒验收中微调，剑刃长度不在此擅定。
+Stagger / Knockback restrictions apply to the uninterruptible hit-reaction motion, including any retreat or fall, not to a persistent control lock throughout the later Knocked Down state. Once that motion ends, a grounded player can use the established grounded actions below; a player who has not fallen regains normal control after the hit-recovery motion ends. The three outcome triggers above remain distinct.
 
-主要操作方向采用上文手柄布局。原先 WASD 移动、鼠标环视、Esc 释放鼠标与点击重新捕获，仅保留为候选开发测试方案，未获批准，不替代手柄设计。Stage 1 是否用键鼠测试或只实现手柄移动／镜头子集需先确认；走跑切换、交互、跳跃、攀爬和对话不因出现在布局表就自动纳入 Stage 1。移动速度、镜头平滑与身体朝向仍为待验证参数。
+### Stagger, Injury, Knockdown, and Disarm
 
-实施顺序：先建场地与角色/武器静态几何并检查坐标 → 加移动与碰撞 → 加跟随镜头 → 设置主场景和输入 → 导入、场景加载与短时启动检查 → 人工试玩并调比例。行为代码只依赖角色主体和明确的视觉节点，不假设未来一定使用骨骼。
+- **Stagger / Knockback:** The uninterruptible hit-reaction process of losing balance, retreating, or falling after an attack, rather than a persistent control-lock state while already on the ground. During this process the player cannot move, attack, block, dodge, shoot, or perform other actions; a QTE cannot bypass or interrupt it. After the hit-reaction/recovery motion ends, enter the controllable Knocked Down state if the character has fallen; otherwise restore normal control. Exact reaction/recovery duration needs discussion and later tuning; a short cinematic camera response remains possible.
+- **Injury:** HP damage is uncommon but serious. An enemy body hit may cause dismemberment/execution. Player hand hits may disarm according to resource state, leg hits may cause stumbling, and torso hits may cause major stagger/knockdown. Serious injury causes major HP loss, longer reactions, and difficulty with precise defense. **Blur starts below 30% HP and strengthens as HP falls.** Blur curve, injury motions, and recovery values remain tunable. Penalties recover after HP crosses appropriate thresholds. Recovery after a period without being attacked remains the direction, with about five seconds as a candidate delay. Consumable healing/input remain unresolved.
+- **Knockdown / Knocked Down:** The controllable grounded state entered only after the uninterruptible falling hit reaction has ended. At that point, □ / X swings defensively, ○ / B rolls, and ✕ / A attempts to rise. **Grounded roll has highest priority and interrupts rising or grounded swings; grounded swings interrupt rising.** Rolling or swinging during rising immediately resets get-up progress. Rising requires **five accepted jump/get-up presses**, with progressive bracing/partial-rise feedback, not a sudden stand on press five. These grounded permissions and priorities do not allow interruption of the preceding hit reaction. Accepted-press timing and other interruption details remain open. Automatic selection of a safer rising direction is still a candidate needing threat/agency discussion.
+- **Disarm:** □ / X becomes unarmed melee without meaningful damage. L1 can be attempted but risks further knockback. Left-hand L2 remains available; if the gunblade is visible, right-hand R2 may recall it, automatically igniting the recalled blade. Repeated □ during recall may enable catch-and-slash; conditions remain open. L2 and R2 recall can occur simultaneously.
 
-Stage 1 自动验收：导入无解析/资源错误；烟雾测试能加载并实例化场地、角色、镜头和武器；主场景短时运行无启动错误。移动、镜头和握持是否合适仍需人工验收。
+#### Dodge and Lethal-Attack QTE
 
-Stage 1 人工验收（未来）：F6/F5 可进入场地；经确认的测试输入移动方向与镜头一致；角色不会穿过地面或目标；镜头不会进入角色或穿地；若用键鼠则捕获／释放可用；约 170 cm 角色与 20 cm 主体、15 cm 枪管、16 cm 安装位置的比例可读，单手握持合理，另一只手独立可见；靠近和绕行目标时距离可判断；无未经输入的攻击或追击。记录尺寸、速度与构图调整，不以 Headless 测试代替观感验收。
+With positive resource and normal defense available, no special lethal-attack dodge QTE triggers. Attacks follow precise-parry, held-defense, or instinctive-defense rules.
 
-## Open Design Questions — 尚未确定的机制
+Only danger following resource depletion and defensive collapse permits consideration of special lethal attacks and a dodge QTE. Zero resource does not guarantee a QTE on every attack. Lethal motions, warning timing, dodge window, failure resolution, and whether/how the QTE is used remain open. The earlier head-directed slow-motion dodge idea belongs to this restricted, unresolved area.
 
-以下需要用户决定或进一步讨论，不得把建议写成最终规则。当前操作与动作范围仍在讨论，Stage 1 保持待确认；按阶段聚焦问题，不提前实现默认答案。
+During an uninterruptible Stagger / Knockback hit reaction, the player cannot dodge, and a QTE grants no additional interruption permission. If a lethal attack connects during that motion, the system must not force in a rescue dodge. After the falling motion ends, the player can roll using the established Knocked Down controls. This boundary does not define new QTE trigger, warning-window, or failure-resolution rules; those remain unresolved.
 
-### 输入语义与情境权限
+### Offensive Blade Contact and Ordinary Enemies
 
-| 开放问题 | 已有边界／讨论重点 |
+If both attacks miss, both miss. When both could hit, actual spatial contact and trajectories must establish a valid blade exchange. Valid contact resolves as a clash; invalid contact cannot be turned into a clash for presentation, nor may the system arbitrarily choose whether to clash. Potential body hits or animation progress alone are insufficient. Neither participant loses resource merely because of that valid mutual clash.
+
+Exact spatial/trajectory tests, collision response, torque, and complex pressing motions require dedicated design. Ordinary collisions, parries, and bounces do **not** automatically become sustained Bind.
+
+Organize the first enemy AI conceptually into three layers, without prebuilding a framework:
+
+| Layer | Responsibility |
 | --- | --- |
-| L1 如何持续与释放？ | 之前倾向按住持续防御，但未最终确定 |
-| L2 是持续施加还是短暂触发？ | 不冻结整个角色；与 L1 能否并行、资源消耗、适用攻击、范围、时长和敌人脱离规则均待定 |
-| R1 按住进入还是按下切换？ | 面键能力内容、对 L1/L2/R2 的影响及与其他动作并发未定 |
-| □ 是单次请求、连续输入还是其他方式？ | 需明确攻击意图持续多久及变更规则 |
-| △ 如何连续射击与精确瞄准？ | 不强制所有射击进入瞄准姿态 |
-| ○ 闪避方向如何确定？ | 保留玩家方向意图，动作形式未定 |
-| 战斗中跳跃／攀爬、对话与交互如何共存？ | 需讨论权限和动作并发；不能预设战斗中交互必然禁用 |
-| 不同情境怎样进入、退出并授予输入权限？ | 非战斗不等于收武器，不以永久固定布尔值包办；探索中的剑刃切换权限未定 |
-| Stage 1 使用什么最小测试输入？ | 键鼠方案或手柄移动／镜头子集均待确认，不扩展为完整布局实现 |
+| Intent | Defensive waiting, active offense, or distance adjustment |
+| Reaction | Whether defense can occur in time given current action state and reaction capability |
+| Mistake | Reaction and judgment errors creating understandable openings; accumulated actual attack pressure increases mistake probability |
 
-### 战斗机制、动作执行与结果
+Initial scope is defensive waiting, offense, and distance adjustment. Probes/feints are deferred. Start with reaction mistakes; judgment mistakes are later extensions. Enemy differences primarily use parameters such as aggression and reaction speed. Move pools, attack frequency, and reaction-time values are unspecified. Advanced dodging is not required initially.
 
-| 问题 | 后续验证方向 |
+An internal timing/decision table may schedule attacks, e.g. after several inactive seconds. Being attacked during anticipation/recovery may provoke costly defense with substantial resource loss or stagger. Outside attacks, held-defense-like behavior loses resource when blocking. Enemies may turn to defense according to timing/state. Ordinary-enemy guard break may permit direct execution.
+
+Mistakes are decision/reaction errors, not random post-contact victory declarations. Retain **10% base mistake probability plus five percentage points each time the enemy actually receives effective player attack pressure**. Attacks stopped by ordinary defense, instinctive defense, or another defensive response count as pressure; HP loss is not required. Whiffs and attacks that exert no actual pressure do not count. Accumulation represents the difficulty of continually handling player offense, not the number of attack-button presses. Reset the accumulated pressure streak **after successful valid defense followed by a genuine breathing opportunity**; defense alone is not sufficient. Probability caps, breathing-opportunity detection, which special attacks count, and eligible mistake types remain open; attack frequency/timing still require tuning.
+
+#### Blade Bind
+
+**Trigger:** Enemy attacks are selected from move pools; some special moves have `CanInitiateBind`. Selecting one and making valid blade contact with the player enters Bind without another probability roll. The move starting alone does not guarantee Bind. Earlier player dodge, interruption of the enemy attack, or no valid blade contact prevents entry.
+
+**One-on-one encounters allow Bind; multi-participant combat disables it outright.** Even a selected Bind-capable move resolves only as ordinary attack/contact in multi-participant combat. Encounters use prearranged waves or encounter areas, without regular sword enemies suddenly joining an ongoing duel. This shared encounter/combat constraint removes the need for a special mid-Bind second-swordsman mechanism in the regular flow. Environmental exceptions such as stray dogs must not arbitrarily interrupt a duel or Bind. Classification scope remains configurable; no fixed distance, wave count, spawning method, or area size is chosen. See Exploration, Confrontation, and Combat Permissions for the encounter structure.
+
+**Interaction:** Bind is an arm-wrestling-like two-sided pressure QTE over one shared progress track. Repeated attacks (□ / X or left mouse button) add player pressure; enemy continuous pressure moves progress toward its side. Direction prompts require right-stick movement (RS) or mouse movement to redirect the blade press. Correct input adds player progress; wrong input adds enemy progress rather than instantly failing. Prompts may appear in-game and must match the pressing motion.
+
+L2 / LT Force Block may assist in maintaining Bind; Force cost and pressure bonus remain open. During Bind, the camera locks onto both participants. RS/mouse movement drives the direction QTE rather than the ordinary camera, taking priority over soft-lock control. Normal combat camera/input return afterward. **RS movement is not R3/RS Click; R3 remains interaction.**
+
+Accepted repeated-press rate cap, direction thresholds, prompt frequency, pressure rates, and duration are tuning questions without confirmed values. Do not silently reuse ordinary-attack lockout values for Bind inputs.
+
+**Ordinary Bind QTE victory:** Suppress/deflect the enemy blade and reduce enemy Weapon Durability, increasing disarm chance on subsequent ordinary player attacks. A brief blade-opening/stagger animation is allowed; extra damage or prolonged stun is not a default reward. Victory does not immediately destroy the weapon.
+
+**Ordinary Bind QTE defeat:** Exactly one outcome occurs: player weapon leaves the hand **or** player suffers serious injury. They are mutually exclusive in the same Bind defeat. The move and matching animation determine the outcome. Damage, injury location, and serious-injury duration are unspecified.
+
+**Deliberate blade retraction during Bind:** R2 / RT removes blade support; current motion, relative position, enemy trajectory, and timing determine whether the continuing attack hits the player (serious injury) or misses because support disappeared (enemy loses balance and falls, enabling direct execution). This is a separate tactical resolution, not an ordinary QTE win/loss or random roll, and not a penalty-free cancel. Detailed trajectory detection, action windows, fall animation, execution input, and execution timing remain to be designed.
+
+Bind is a special interaction with explicit conditions, not a replacement for ordinary attacks, precise parries, held defense, instinctive defense, or momentary clashes, and not the default outcome of blocking. The player chooses actions; the system chooses motion presentation. Bind animations and physical-contact details require separate design.
+
+#### Weapon Durability
+
+Weapon Durability is independent of posture/stamina. Ordinary Bind QTE victory is the primary confirmed way to reduce enemy durability; lower durability increases enemy disarm chance from subsequent player attacks.
+
+It coexists with unchanged base resource-driven disarm: 0% at ≥50% resource, rising linearly to 60% at zero. Combination formula, curves, combined cap, durability recovery, and zero-durability outcome are unresolved. Do not assume addition, automatic breakage, or automatic disarm at zero.
+
+### Force Ability Layer
+
+**Hold R1 / RB:** □ / X = Force Pull; △ / Y = Force Push; ✕ / A = Force Slam (force the enemy down); ○ / B = Force Choke. Effects, interruption, and concurrency are incomplete; this does not authorize an ability framework.
+
+Force abilities consume a Force resource separate from posture/stamina. Player attacks against enemies restore Force. Meeting an ability's own Force requirement permits use without another universal activation threshold. Costs, limits, and restoration amounts remain open.
+
+**Choke retains its special rule:** at least 75% Force to start; completion consumes all Force and may execute an ordinary enemy. Approximately two seconds to complete remains a candidate duration. Interruption and target eligibility remain unresolved.
+
+### Controller Layout & Input Permissions
+
+DualSense labels with Xbox equivalents describe the current design; no Input Map exists. Stick movement differs from clicks. Unresolved timing/concurrency cannot be inferred from assignments.
+
+| PlayStation | Xbox | Function |
+| --- | --- | --- |
+| Left stick | Left Stick | Movement |
+| L3 | LS Click | Toggle walk/run |
+| Right stick movement | RS movement | Normal camera/soft lock; direction QTE during Bind |
+| R3 | RS Click | Interaction |
+| ✕ | A | Jump/contextual climb; grounded get-up |
+| L1 | LB | Precisely timed parry / held defense |
+| L2 | LT | Hold left-hand Force Block; assist Bind |
+| R1 | RB | Hold four-button ability layer |
+| R2 | RT | Blade toggle; disarmed recall |
+| □ | X | One ordinary melee per accepted press; contextual grounded/unarmed actions; repeated Bind pressure input |
+| △ | Y | Single shot; hold-to-aim deferred |
+| ○ | B | Contextual dodge / roll |
+| D-pad | D-Pad | Four dialogue choices |
+
+R1's effects on L1/L2/R2 and general concurrency remain incomplete. Bind overrides camera motion with direction QTE; R3 remains interaction.
+
+### Keyboard/Mouse Layout (Provisional; Separate Review Required)
+
+| Action | Keyboard / Mouse |
 | --- | --- |
-| HP、体力、架势或隐藏状态是否存在？ | 先观察接触是否可读，再比较抽象方式，不预设削血或处决循环 |
-| 攻击目标在距离外时怎么办，是否自动接近？ | 比较姿态表达、试探和有限接近；自动接近涉及玩家移动权限 |
-| 是否锁定目标，如何选取意图目标？ | 比较自由镜头与锁定的判断负担，Stage 1 不需要战斗锁定 |
-| 攻击能否取消、衔接窗口如何设定？多个输入谁优先？ | 主导行为何时改变仍未定，不提前确定完整状态机 |
-| 是否采用动作频率高于决策频率的方案？ | 验证持续意图下多次执行细节的控制感，不能自动产生新战术 |
-| 主动防御和本能防御如何区分？ | 本能防御的触发、成功率、方向限制及后果未定；不得连续反击、无成本防住一切或保证无伤 |
-| 剑刃初始状态、伸缩速度与切换许可如何设定？ | R2 按一次切换已明确；动作许可、接触判定时点未定，保留交锋主动收刃的可能 |
-| 闪避采用侧身、后撤还是其他动作？ | 必须保留玩家方向意图，不能默认大幅翻滚 |
-| 格挡、拼刀、力矩反馈、失衡、缴械与有效命中如何判定？ | 考虑方向、力臂、作用力、握持与双方动作，不规定剑尖命中必缴械；收刃和原力格挡不保证失衡 |
-| 敌人何时被击败，玩家受伤有什么后果？ | 基本武器交互遵循可理解规则，长期后果不必完全对称 |
-| 快速射击怎样协调意图目标和真实枪口？ | 比较姿态调整和几何命中反馈，不预设随机散布或无条件命中 |
-| 敌人怎样回应意图、何时反击或调整距离？ | 先讨论少量可读行为，不预建 AI 框架，不强制固定次数交锋 |
-| 剑刃长度、握持细节、镜头参数与应用名称如何确定？ | 身高与枪剑参考尺寸已更新，剩余参数需讨论或灰盒验证 |
+| Move | WASD |
+| Camera / Bind direction QTE | Mouse movement, by context |
+| Walk/run toggle | Shift |
+| Melee / Bind pressure presses | Left mouse button |
+| Shoot | F |
+| Parry/guard | Right mouse button |
+| Dodge | Alt |
+| Interact | E |
+| Jump/get up | Space |
+| Force Block | R |
+| Blade toggle / recall | Q |
+| Force Pull | Ctrl + 1 |
+| Force Push | Ctrl + 2 |
+| Force Slam | Ctrl + 3 |
+| Force Choke | Ctrl + 4 |
+| Dialogue choices | 1 / 2 / 3 / 4 |
 
-## Development & Testing Instructions — 开发与测试
+The broader keyboard/mouse scheme remains provisional, not an Input Map. Hold/modifier-release/context semantics need review; Bind's left-click and mouse-direction roles are recorded above.
 
-当前仅维护设计文档：只修改 `README.md`，不创建场景、脚本、Input Map、测试代码或其他实现，不创建 commit。以下引擎指令保留为开发参考，不表示本轮执行了新的游戏测试；文档一致性检查不构成 Stage 0 验收。
+### Exploration, Confrontation, and Combat Permissions (Future Direction)
 
-本机已核实的引擎路径：`E:\SteamLibrary\steamapps\common\Godot Engine\godot.windows.opt.tools.64.exe`。其他机器使用自己的 Godot 可执行文件路径；目前只验证上述 4.7.2 构建，未验证其他版本或导出平台。`godot` 尚未加入本机 PATH。
+**Confirmed encounter structure:** Use Devil May Cry-like staged encounters, primarily organized into prearranged enemy waves or encounter areas. Regular sword enemies do not suddenly join an ongoing one-on-one fight. One-on-one encounters permit Bind under its contact rules; multi-participant encounters disable it, with Bind-capable moves treated as ordinary attacks/contact. Level and combat design share this constraint rather than requiring complex handling of a second regular swordsman joining mid-Bind. Stray dogs and other environmental enemies may be special exceptions, but must not arbitrarily interrupt an ongoing duel or Bind. Wave counts, spawning methods, area sizes, and detailed level flow are not specified.
 
-在项目根目录运行以下 PowerShell 命令：
+Noncombat does not imply holstering or that drawing a blade is the only combat entry. Ignition may be available outside combat, subject to city/narrative restrictions. Cities may disable attacks, shooting, blocking, dodging, and Force combat actions and use a closer camera. Exploration does not universally disable R2. Movement, camera, walk/run, interaction, environment actions, and dialogue depend on context.
+
+Future confrontation may use L1 near a potentially hostile humanoid with an unlit blade. Camera changes, holster preparation, dialogue, and explicit □ draw/ignite or △ shoot choices may follow. Dialogue may defuse/escalate; combat after about five seconds without response is only a candidate. A lit blade in a hostile outpost may prompt confrontation or combat; hostile animals may skip confrontation.
+
+Context/permission/transition details are unfinished; do not reduce everything to a permanently fixed `is_in_combat` boolean. Dialogue/confrontation are outside Stage 1, and candidates are not approved implementation.
+
+## Candidate Approaches & Design Risks
+
+### Fast Motion and Player Decision Frequency
+
+A separate block press per contact may force slow attacks and a wait-for-cue loop. Automatic defense against every attack may turn one attack press into an autonomous duel. Both risks need testing.
+
+**Motion frequency can exceed decision frequency:** held L1 maintains defense and responds to real threats within that intent. Density/rhythm/continuity need testing; one offensive input does not authorize an entire automatic exchange.
+
+| Current-intent execution details | Unauthorized tactics |
+| --- | --- |
+| Wrist adjustment, tip redirection, small pose changes | Counters or new attacks |
+| Deflections needed for current defense | Pursuit or dodge |
+| Contact-driven weapon adjustment | Autonomous abilities |
+
+Validate readability, traceability to intent, response to input changes, and excessive protection. Presentation cannot guarantee safety or clashes. Bind's contextual QTE does not globally redefine ordinary inputs.
+
+### Instinctive Defense and Offensive/Defensive Priority
+
+Costs, baseline stumble, guard-break stagger, and defense restrictions during the uninterruptible hit reaction are defined above; that reaction lock does not extend throughout the controllable Knocked Down state. Instinctive defense is consequential, without automatic counters or guaranteed safety. Positive pre-trigger resource is sufficient without full payment; detection/cost values remain open.
+
+Dodge/L1 relative priority over attacks is set; other arbitration/cancellation remains incomplete. Grounded roll/swing/rise priorities are now set, while automatic safe-direction rising and agency remain open. This does not approve a complete state machine.
+
+### Soft Target Lock and Camera
+
+Use automatic soft selection rather than rigid manual lock-on. Keep selected targets stable rather than continually changing for a nearer enemy. The following rules replace the old nearest-first, first-in-list tie-break, and direct directional-switch scheme; those are not parallel confirmed alternatives.
+
+While locked, right-stick camera operation within **±40° of the target-centered direction** does not switch or unlock. Input beyond the range must persist before unlocking. **0.8–1 second** remains only a candidate controller duration. After unlocking, restore **Orient to Movement**, turning by movement direction.
+
+Automatic reacquisition requires both:
+
+1. Enemy within **±40° of camera facing**.
+2. Enemy within **±20° of player movement direction**.
+
+Randomly select among multiple qualifying enemies. A brief post-unlock relock-protection period is a candidate only. Initial acquisition, stationary-player behavior, and target-death handling under these revised rules require clarification; do not silently restore nearest-enemy fallback.
+
+Mouse/controller thresholds remain adjustable. The earlier same-direction mouse motion above a velocity threshold for about 0.4 seconds remains only a candidate to test against the new angular design. Exact mouse thresholds and post-unlock camera response remain open. Increasing camera resistance and fast-initial/slow-settling return remain a feel direction subject to tuning.
+
+Future damping or input response must expose an editable Godot **Curve** resource with a **linear default** for manual editor adjustment. This task creates no Curve file. Bind's fixed encounter camera/direction QTE takes priority over normal soft-lock input. Soft lock stays outside Stage 1's basic camera scope.
+
+## Current Implementation
+
+Initial inspection: 2026-10-13. Stage 1 now includes the accepted static greybox, basic camera-relative player movement, walk/run toggle, and a controllable right-shoulder perspective camera. The enemy remains static. The table describes current implementation; historical inspection and static checks are retained separately. No combat or weapon animation is implemented.
+
+| Item | Observed state |
+| --- | --- |
+| Project | `project.godot` exists; `config_version=5` is a configuration format, not the engine major version |
+| Local engine | `--version` returned `4.7.2.stable.steam.ed1daf0bf` |
+| Project feature markers | `4.7`, `Forward Plus` |
+| Application name | `Wuwaproject`; renaming remains open |
+| Rendering/physics | Forward Plus, Windows `d3d12`, `Jolt Physics`; static rendering manually confirmed after the Step 1 camera correction, new camera presentation still pending acceptance |
+| Scenes/scripts | Arena, reusable actor/gunblade, and `scenes/camera/third_person_rig.tscn`; `scripts/player_controller.gd` on the player instance only and `scripts/third_person_camera.gd` on the rig. No skeleton or animation system |
+| Assets | Native primitive meshes, simple embedded materials, marker nodes, and labels; default icon retained. No imported actor models, textures, or custom shaders |
+| Input/systems | Minimal movement/look/walk-run/mouse-capture Input Map. Camera-relative CharacterBody3D movement and orbiting shoulder camera exist. No Autoload, plugins, combat, AI, weapon detection, shooting, trail, jump, dodge, or soft lock |
+| Tests/export | `tests/smoke_test.gd` performs 56 input/physics/camera checks; import and startup checked. No CI or export presets |
+| Repository support | Git, `.editorconfig`, `.gitattributes`, `.gitignore`; working tree clean before initial inspection |
+| Local cache | Git-ignored `.godot/` editor/import caches are not game implementation |
+
+### Initial Inspection Verification (Historical)
+
+- Engine version query succeeded.
+- `--headless --editor --import --quit` succeeded without errors.
+- `--headless --quit` reported `Can't run project: no main scene defined in the project.` The game could not start despite exit code 0; exit status alone is insufficient.
+- Initial sandbox checks had editor-data write errors. After approved rerun outside the sandbox, import succeeded and startup reported only the missing main scene.
+- Local ignored logs: `.godot/inspection-import.log`, `.godot/inspection-run.log`.
+- No scripts/scenes existed for logic/resource-loading tests. Headless import does not validate camera, motion, rendering, or feel. Graphical startup has not been accepted.
+
+### Stage 1 Step 1: Static Layout and Verification (Historical)
+
+World coordinates are Y up, ground surface Y=0, actor local forward -Z, and local right +X, with one unit per meter. Both actors instance the same scene: a script-free `CharacterBody3D` and matching 1.7 m cylindrical collision, with a separate `VisualRoot`, cylindrical body, and two spherical hands. The body radius is 0.25 m; hands have 0.065 m radius. These greybox width/hand-size choices are adjustable presentation parameters, not combat rules.
+
+Player origin is `(0, 0, 1.5)`, facing -Z; the static enemy is `(0, 0, -1.5)`, rotated 180° about Y to face the player. Origins are 3 m apart. The 10 × 10 m floor has a top surface at Y=0 and a `StaticBody3D` collision. A 1 m reference grid, colored X/Z axes, labels, and a small front-facing marker make scale and orientation readable.
+
+The right hand is at actor-local `(0.38, 1.1, -0.18)`; the gunblade grip origin coincides with its center. Weapon local +Y follows the hilt and blade; -Z is barrel/muzzle forward. Hilt bottom is Y=-0.07 and top Y=0.13; its length is 0.20 m. The 0.15 m barrel runs from Z=0 toward -Z at Y=0.09, 0.16 m above the hilt bottom. `Muzzle` is `(0, 0.09, -0.15)` facing -Z; `BladeBase` is `(0, 0.13, 0)` and `BladeTip` is `(0, 1.13, 0)`, with a 1 m blade between them. `Grip` and `HiltBottom` markers make the coordinate origin explicit. No weapon collision or shooting behavior is added.
+
+The blade has a simple unshaded emissive material for identification; there is no Glow/trail system. `StaticObservationCamera` is a fixed orthographic view at `(4.5, 3.4, 5.5)`, aimed at `(0, 1.1, 0)`, with size 5.6. It is a temporary static-inspection camera, not the Stage 1 third-person camera rig or soft-lock camera.
+
+Automated checks completed on 2026-10-13 using Godot `4.7.2.stable.steam.ed1daf0bf`:
+
+- Headless editor import succeeded without resource/parse errors.
+- Main scene started for eight frames and exited without resource/script errors. Initial sandbox startup could not create the engine user-data directory; the approved run outside the sandbox succeeded.
+- A temporary, ignored `.godot/` geometry-check script loaded/instantiated the arena and passed **49 checks**: actor structure and height, collision dimensions, sphere hands, shared actor/independent weapon instances, grip alignment, hilt/barrel/blade dimensions, mounting height, muzzle/base/tip positions and axes, world blade span, origin spacing/facing, active static camera, and floor surface. A physics ray hit the floor at Y=0. The helper was removed after verification; no gameplay script or future smoke-test infrastructure was created.
+- Logs remain local and Git-ignored: `.godot/inspection-import.log`, `.godot/step1-startup.log`, `.godot/step1-geometry.log`.
+
+At the initial delivery, manual acceptance covered proportions, grip, blade/muzzle visibility, labels, lighting, and the fixed-camera framing via F5/F6. Headless checks alone did not establish visual quality. The failure and repair below are historical; the user has since confirmed that the static scene renders and authorized basic movement and third-person camera work.
+
+The first manual run failed: the editor showed the geometry, but the game view was nearly black with no actors. Runtime diagnosis found that the serialized Camera3D basis had been transposed. Its forward direction was `(0.633238, 0.238323, -0.736350)` rather than the intended `(-0.602468, -0.307928, -0.736350)`; the player body center was behind the camera and both body centers were outside its frustum. The original checks verified an active camera but did not verify its aim or framing. The basis was corrected without changing position, orthographic size, near/far, actors, or weapon geometry. A second configuration issue was corrected: ambient source was Sky with no Sky resource; it now uses Color so the existing ambient color/energy apply.
+
+After repair, runtime checks confirmed the assigned main scene and active camera, exact aim toward `(0, 1.1, 0)` (alignment dot product 1.0), and **26 actor/weapon sample points inside the frustum** at a representative 1152 × 648 viewport. Visibility/layers permit both bodies, the directional light is visible at energy 1.2, and no SubViewport exists. The existing `canvas_items` / `expand` stretch configuration was retained. Editor import and eight-frame headless startup passed again. The temporary diagnostic helper was removed; its ignored log is `.godot/step1-camera-diagnostic.log`. Static rendering was subsequently confirmed by the user; the fixed camera has now been replaced as described below.
+
+### Stage 1: Basic Movement and Right-Shoulder Camera
+
+Only the player instance has `player_controller.gd`; the reusable greybox scene remains script-free for the static enemy. Input uses a circular 0.2 stick deadzone through `Input.get_vector`. Camera forward/right vectors are flattened onto the ground plane to calculate movement, retaining analog magnitude and limiting diagonal speed. CharacterBody3D uses project gravity and `move_and_slide()` for ground/enemy collision. The default is walking at 2 m/s; Shift or L3 toggles running at 3.5 m/s. Turning smoothly follows realized horizontal velocity, including collision sliding; no movement animation is added.
+
+The independent `ThirdPersonRig` follows player position at neck height, without inheriting player rotation. Its yaw and `PitchPivot` control orbit around this observation point rather than world origin. Shoulder offset is defined in the camera-orbit frame, so player turns do not flip its side. The SpringArm sphere sweep runs diagonally from the observation point toward the offset camera and excludes the player's RID. A counter-rotation makes Camera3D face orbit-forward while leaving the actor left of screen center. Obstacles shorten the arm; its unobstructed length is approximately 2.693 m, corresponding to 1 m right and 2.5 m rear components.
+
+Select `TestArena/ThirdPersonRig` in the Inspector to adjust:
+
+| Property | Initial value | Meaning |
+| --- | --- | --- |
+| Rear Distance | 2.5 m | Rear component of unobstructed camera offset |
+| Right Offset | 1.0 m | Right component in the orbit frame; no shoulder switching |
+| Observation Height | 1.55 m | Follow/orbit point above player feet |
+| Mouse Sensitivity | 0.12 degrees/pixel | Captured mouse look |
+| Stick Sensitivity | 120 degrees/second | Full right-stick look |
+| Min / Max Pitch Degrees | -60 / +45 | Downward / upward look limits |
+| Follow / Rotation Smoothing | 16 / 12 | Exponential response rates; zero makes that response immediate |
+
+Camera3D uses Perspective, FOV 70°, near 0.08 m, far 50 m. SpringArm uses a 0.15 m sphere and 0.1 m collision margin. These camera and smoothing values are initial tuning, not finalized composition. Player speeds and turning response can be edited on `TestArena/Player`. No camera manager, soft lock, target selection, shoulder switching, cinematic camera, or Bind camera is added.
+
+Implemented controls: WASD / left stick move, Shift / L3 toggle walk/run, mouse / right stick look. Left-click the game viewport to capture the mouse; Esc releases it, and focus loss releases it as well. Mouse starts visible; a click captures it. Left-click performs no attack. Only these 11 necessary actions are mapped; combat and jump inputs are absent. Physical gamepad and native-window mouse behavior remain manual checks.
+
+Automated verification on 2026-10-13: editor import and main-scene short startup passed without parse/resource/runtime errors. The headless smoke test passed **56 checks** covering resource loading, active perspective camera, default offsets and left-of-center neck projection, initial enemy projection, keyboard/controller mappings, absence of combat/jump actions, walking/running distances, toggling, camera-relative movement after yaw changes, realized-motion facing, floor/enemy collision, static enemy, follow convergence, stick rotation/pitch clamps, mouse look math, self-collider exclusion (including a centered sweep), shoulder preservation after body rotation, and arm retraction/restoration against a temporary test-only wall. The wall is not part of the arena file. Native mouse capture cannot be validated by the headless dummy display; only its mappings and look calculations are covered. Log: `.godot/stage1-controls.log` (ignored).
+
+Manual acceptance remains required: F5/F6 rendered startup; actual WASD/left-stick input and Shift/L3 switching; physical right-stick and mouse capture/release/focus behavior; smooth turns and follow; right-shoulder composition across yaw/pitch and aspect ratios; obstacle avoidance near the floor and enemy, including lack of jitter/undesired self-retraction; and overall sensitivity/smoothing feel. The finite floor has no arena walls: stepping off its edge can cause a fall, with no respawn system added. Do not interpret the automated projection/obstruction tests as visual or feel acceptance. Await acceptance before further work; Stage 2 is not authorized.
+
+## Planned Prototype Stages
+
+Stage 0 is not finally accepted. The user accepted static rendering and authorized Stage 1 basic movement and the right-shoulder third-person camera. Those systems are implemented and automatically checked, with manual acceptance pending. Stages 2–6 remain unapproved and unimplemented. This authorization does not include weapon animation or combat.
+
+| Stage | Minimum scope | Validation gate |
+| --- | --- | --- |
+| Stage 0 — Project Inspection & Design Discussion | Inspection, README, mechanics/scope discussion | Ongoing, without acceptance; documentation is not stage approval |
+| Stage 1 — Greybox Foundation | Static greybox plus camera-relative movement, walk/run toggle, and controllable right-shoulder perspective camera; enemy remains static | Static rendering accepted; movement/camera import, startup, and 56 checks passed. Native input, visual composition, obstruction feel and control feel await manual acceptance |
+| Stage 2 — Weapon Motion | One-handed poses, a few thrusts/cuts, defensive/shooting transitions; extension presentation after approval | Controllable continuous motion and credible muzzle orientation; visuals are not combat resolution |
+| Stage 3 — Visual Effects | Blade material, Glow experiments, trail, contact feedback | Trail follows actual motion independently of detection; clear fast motion; test contact events drive feedback |
+| Stage 4 — Basic Combat Exchange | Limited enemy behavior, spatial/trajectory contact, attack windows, three defenses and resource/guard-break loop | Credible contact, control, depletion-hit absorption then immediate break; Bind core is documented but parameters/contact/animation need design, without automatic scope expansion; no general AI/physical simulation; may overlap Stage 3 |
+| Stage 5 — Contextual Combat | Distance/pose selection, defensive transitions, quick shots; approved exploration of retraction, Force Block, soft targets, disarm/injury | Intent and muzzle fidelity; no guaranteed advantage from retraction/Force Block; Bind/durability and remaining contextual details need planning, not full-system rollout |
+| Stage 6 — Cinematic Presentation | Dynamic composition, shake, slow motion, key moments | Improved presentation while preserving control/readability |
+
+### Stage 1 Implementation Plan (Foundation and Basic Controls Authorized)
+
+A flat arena with a movable greybox player and static opponent, both cylinder-and-hands actors with one-handed gunblades. Use reference proportions and an approximately one-meter blade; static display does not decide default gameplay blade state.
+
+No combat, shooting, dodge, jump, automatic pursuit, tactical extension, Force Block, ability layer, Bind, soft lock, or full exploration/dialogue belongs here. Static foundation and basic controls below now exist; additions beyond this authorized scope require separate approval.
+
+| Planned file | Responsibility |
+| --- | --- |
+| Modified `project.godot` | Main arena and only the movement/look/walk-run/mouse-capture Input Map; rendering/physics settings retained |
+| Modified `scenes/test_arena.tscn` | Preserved greybox; player-only controller and independent shoulder-rig instance replace the fixed camera; labels identify initial spacing/start location |
+| Created `scenes/actors/greybox_actor.tscn` (Step 1; unchanged this round) | Script-free reusable `CharacterBody3D`, collision, separate `VisualRoot`, body cylinder and hands; gunblade on right hand. Only the arena player instance receives the controller; the enemy stays static |
+| Created `scenes/weapons/gunblade.tscn` (Step 1) | Two cylinders/blade mesh; grip origin, `Muzzle`, `BladeBase`, `BladeTip`, `HiltBottom`; no combat logic |
+| Created `scripts/player_controller.gd` and generated `.uid` | Player input, camera-relative movement, gravity, collision, realized-motion facing |
+| Created `scenes/camera/third_person_rig.tscn` | Yaw/pitch pivots, diagonal SpringArm sphere sweep, perspective Camera3D |
+| Created `scripts/third_person_camera.gd` and generated `.uid` | Exported shoulder/look/smoothing parameters, follow/orbit, self-exclusion, capture/release; no lock-on/cinematic cuts |
+| Created `tests/smoke_test.gd` | Headless input, movement/collision, perspective/offset/follow and obstruction checks; not visual acceptance |
+| Updated `README.md` | Implementation, controls, tuning and automated/manual coverage; combat decisions unchanged |
+
+Step 1 uses the coordinate conventions and dimensions recorded above. Hand spacing, visual proportions, and observation-camera distance remain subject to manual acceptance; these are static layout choices, not finalized combat poses.
+
+The authorized movement/camera input subset is now implemented for keyboard/mouse and controller. The broader combat keyboard/mouse scheme still needs separate review. Interaction/jump/climb/dialogue are not implemented. Walk 2 m/s and run 3.5 m/s remain tuning references, with Inspector-adjustable camera parameters; click capture and Esc release are now implemented, pending native-window acceptance.
+
+Future sequence: static arena/actor/weapon and coordinate check → movement/collision → follow camera → main scene/minimum input → import/resource/short startup checks → manual proportions/feel review. Logic depends on actor body and explicit visual nodes, not a required future skeleton.
+
+Future automated acceptance: no import/parse/resource errors, smoke-test instantiation, and short startup without errors. This does not verify feel or grip.
+
+Future manual acceptance: F5/F6 enters arena; agreed movement matches camera; actors do not pass through ground/target; camera stays outside actor/ground; mouse capture works if used; proportions and one-handed grip are clear, other hand visible; approach/circling distance readable; no unauthorized attack/pursuit. Record scale/speed/framing adjustments, not Headless success as visual proof.
+
+## Open Design Questions / Deferred Discussions
+
+Static foundation and basic movement/right-shoulder camera are authorized; further development awaits manual acceptance and new approval. Preserve resolved combat rules while discussing unfinished details; do not implement default answers.
+
+### Six Major Design Areas
+
+| Area | Current status and remaining work |
+| --- | --- |
+| 1. Blade contact and sustained binding | Bind entry, pressure QTE, camera/input override, ordinary victory/mutually exclusive defeat, and separate trajectory-based retraction outcomes are confirmed. Staged encounters preserve duels; multi-participant combat disables Bind. Ordinary Sword Art contact, complex presses, specific moves, spatial/trajectory tests, Bind tuning/animations, execution input/timing, encounter classification scope, and durability formulas remain open |
+| 2. Dodge and lethal-attack QTE | Positive resource with normal defense excludes special QTE; post-depletion collapse is prerequisite, not guarantee. QTE cannot interrupt Stagger / Knockback or insert a rescue dodge during it; grounded roll becomes available after the fall reaction ends. Exact triggers, motions, warnings, window, failure, and agency remain open |
+| 3. Knockdown and serious injury | Stagger / Knockback is an uninterruptible hit-reaction process, followed by controllable Knocked Down if grounded or normal control after recovery if not. Only after the fall reaction ends: grounded roll > swing > rise; roll/swing reset rising; five accepted presses with progressive feedback. Blur below 30% remains confirmed. Reaction/recovery duration, get-up timing, safe direction, blur curve, injury motions, healing/recovery values remain open |
+| 4. Enemy AI | Intent/Reaction/Mistake; waiting/offense/distance adjustment; reaction mistakes first; actual attack pressure (including defended attacks, excluding whiffs) increases the streak without requiring HP loss; valid defense followed by genuine breathing resets it. Pools, aggression/frequency, reaction time, special-attack eligibility, breathing detection, caps, and later judgment errors remain open |
+| 5. Force abilities and gunfire | Force costs and attack-based recovery, per-ability requirements without extra universal threshold, Choke exception, and fluid transitions confirmed; hold-to-aim deferred. Values, Bind assistance, eligibility/interruption, precise aim and derived attacks remain open |
+| 6. Soft-lock feel | ±40° safe range, sustained overrun unlock, Orient to Movement, combined camera ±40° / movement ±20° random eligible reacquisition confirmed. Thresholds/timing, Curve tuning, candidate relock protection, initial/stationary/death behavior, and mouse details remain open |
+
+These areas are partly resolved, not finished systems. Keyboard/mouse still requires independent review.
+
+### Additional Input and Permission Questions
+
+| Question | Established boundary / remaining work |
+| --- | --- |
+| Precise-parry/held-defense transition? | Press/hold roles set; timing/release/motion transitions need testing |
+| Force Block constraints/costs? | Hold/release, escape without automatic reapply, L1 against other weapons, R2 recall, and Bind assistance set; range/eligible attacks/cost/bonus open |
+| R1 and other inputs? | Hold/face-button roles set; L1/L2/R2 interactions and concurrency incomplete |
+| Melee/gun input waiting/ignoring/interruption? | Ordinary lockout has no buffering; sequential gun/sword behavior cannot silently override it |
+| Future precise aiming? | Single shots set; hold-to-aim and tap/hold distinction deferred |
+| Dodge direction? | Preserve player direction; contextual motion open |
+| Combat jump/climb, dialogue, interaction coexistence? | Permission/concurrency open; do not assume interaction disabled in combat |
+| Context permissions? | Noncombat need not mean holstered; city/narrative restrictions and confrontation incomplete |
+| Stage 1 test inputs? | Movement, look, Shift/L3 walk-run and click/Esc capture-release are authorized and implemented. Physical-device feel remains manual; broader interaction/combat mappings are not approved |
+| Bind arbitration/exits? | RS/mouse direction QTE and L2 assistance are set; deliberate retraction resolves separately by current motion/trajectory into player serious injury or enemy fall/direct execution opportunity. Detection, action windows, fall animation, execution input/timing, and other action arbitration remain open; regular mid-duel sword-enemy arrivals are excluded by encounter design |
+
+### Combat Mechanics, Execution, and Outcomes
+
+| Question | Established boundary / remaining work |
+| --- | --- |
+| Resource name/costs/recovery? | Posture/stamina and HP exist in design; costs, breathing rates/intervals open |
+| Knockback/disarm rolls? | Existing curves preserved; applicable events and pre/post-deduction sampling open. Baseline stumble, guard-break stagger, and extra knockback remain distinct |
+| Durability and enemy disarm? | Ordinary Bind QTE victory lowers durability; combination curve/cap, recovery, and zero outcome unset; no assumed addition/breakage/automatic disarm |
+| Multi-participant Bind exclusion and encounter scope? | Bind disabled outside one-on-one encounters; prearranged waves/areas exclude regular sword enemies joining a duel. Classification scope, environmental exceptions, wave counts, spawning, area sizes, and detailed level flow remain unspecified; no fixed radius |
+| Bind tuning/feedback? | Press-rate cap, direction thresholds/prompts, pressure, duration, Force assistance, animations/contact need design. Ordinary QTE victory has no default damage/long stun; ordinary defeat is disarm OR injury by move. Deliberate retraction has separate trajectory-based outcomes, with detection/windows/fall animation/execution input and timing unresolved |
+| Out-of-range attacks/taunts? | Empty-space attack candidate, no autonomous pursuit; taunt input/behavior open |
+| Cancellation/intent arbitration? | Dodge > ordinary attacks; L1 interrupts below dodge. No player action or QTE interrupts an ongoing Stagger / Knockback hit reaction. Grounded priorities apply after the fall reaction ends; other windows/concurrency incomplete |
+| Instinctive detection/cost? | Positive pre-trigger resource suffices without full payment; zero or an ongoing uninterruptible Stagger / Knockback hit reaction prevents it. That reaction restriction is not a persistent all-action lock while Knocked Down. Detection/cost values open |
+| Initial blade state/extension timing? | One-meter reference, R2 toggle, and Bind retraction set; timings/contact activation provisional |
+| Dodge form? | Respect direction; no assumption every dodge is a large roll |
+| Ordinary contact/torque/Bind presentation? | Mutual clash itself costs no resource; detailed ordinary contact/pressing and Bind contact/animation solutions unapproved |
+| Execution/injury eligibility and thresholds? | Body hits, ordinary-enemy guard break, and Choke may permit execution, not every hit guarantees death. Blur starts below 30%; other thresholds/recovery/body-part and Bind-defeat injury details open |
+| Quick-shot intent/muzzle geometry? | Intelligible pose/hit feedback; no assumed random spread or guaranteed hit; no unique animation per prototype combination required |
+| Enemy pressure streak/mistake calculation? | 10% base plus five percentage points per effective player attack pressure event, including ordinary/instinctively defended attacks, excluding whiffs; neither button presses nor HP damage define the count. Reset after valid defense followed by genuine breathing. Caps, breathing detection, special-attack eligibility, and mistake types remain open |
+| Grip/camera/application name? | Reference dimensions exist; tune grip/camera manually, decide name separately |
+
+## Development & Testing Instructions
+
+Current scope is Stage 1 static foundation plus basic movement and the right-shoulder camera, with only their required Input Map and smoke tests. No combat, jump, soft lock, weapon animation, Curve resource, or commit is included. Stage 0 final acceptance and Stage 2 approval are not implied.
+
+Previously verified engine: `E:\SteamLibrary\steamapps\common\Godot Engine\godot.windows.opt.tools.64.exe`. Use the appropriate local path elsewhere. Only the recorded 4.7.2 build was checked; other versions/export platforms were not validated. `godot` was not on PATH.
+
+From the project root in PowerShell:
 
 ```powershell
 $godotExe = 'E:\SteamLibrary\steamapps\common\Godot Engine\godot.windows.opt.tools.64.exe'
@@ -233,9 +461,15 @@ $godotExe = 'E:\SteamLibrary\steamapps\common\Godot Engine\godot.windows.opt.too
 & $godotExe --headless --path . --editor --import --quit --log-file .godot/inspection-import.log
 ```
 
-编辑器操作：在 Godot 项目管理器导入根目录的 `project.godot` 并打开。当前无场景，不能用 F5 运行游戏；Stage 1 创建并设置 `scenes/test_arena.tscn` 后，F5 运行项目，F6 运行当前场景。
+Import root `project.godot`, open `scenes/test_arena.tscn`, then F5 runs the main scene and F6 the current arena. Click the game viewport to capture the mouse; use WASD/left stick to move, Shift/L3 to toggle walk/run, mouse/right stick to look, and Esc to release. Select `ThirdPersonRig` to tune the exported camera properties. Inspect actor/weapon subscenes separately for dimensions.
 
-下列命令是 **Stage 1 文件完成后的验证步骤，目前不可作为已通过测试记录**：
+Step 1 startup check:
+
+```powershell
+& $godotExe --headless --path . --quit-after 8 --log-file .godot/step1-startup.log
+```
+
+Current movement/camera verification commands (the smoke test now exists):
 
 ```powershell
 & $godotExe --headless --path . --editor --import --quit
@@ -243,8 +477,8 @@ $godotExe = 'E:\SteamLibrary\steamapps\common\Godot Engine\godot.windows.opt.too
 & $godotExe --headless --path . --quit-after 120
 ```
 
-无界面短时启动用于发现资源、脚本和运行时错误。检查输出和日志，不只看退出码；`--quit-after` 按帧数限制运行，不是视觉或帧率测试。每次阶段完成需记录已验证内容、未覆盖内容及人工验收结果。
+Short headless runs detect resource/script/runtime errors. Inspect output/logs, not only exit codes. `--quit-after` limits frames, not visual quality or performance. Record verified behavior, uncovered areas, and manual acceptance separately.
 
-提交场景、脚本、资源和对应的必要导入描述/UID 文件；不要提交 `.godot/` 缓存与日志。每次开发同步维护本 README 的实际实现与阶段状态，不把计划中的文件和系统写为已有成果。
+In future development, version scenes/scripts/assets and required import descriptions/UID files; exclude `.godot/` caches/logs. Keep implementation/stage status accurate instead of presenting plans as completed work.
 
-本轮交付仅为 README 设计维护。Stage 0 仍在讨论且未最终验收，Stage 1 未获最终批准；待具体操作、战斗与动作范围清晰并经用户确认后，再逐阶段实现。
+The authorized foundation, basic movement and shoulder camera are implemented and automatically checked; new controls/visuals await manual acceptance. Stage 0 is not finally accepted. Stop here: Stage 2, weapon animation, and combat require separate authorization.
