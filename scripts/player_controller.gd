@@ -9,6 +9,9 @@ var is_running: bool = false
 @onready var movement_camera: Camera3D = get_node(camera_path) as Camera3D
 
 func _physics_process(delta: float) -> void:
+	if get_node("DebugPlayerHealth").dead:
+		velocity = Vector3.ZERO
+		return
 	if Input.is_action_just_pressed("toggle_run"):
 		is_running = not is_running
 

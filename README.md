@@ -1,6 +1,6 @@
 # Blaster-Saber-Godot-Demo
 
-A Godot third-person cinematic gunblade combat prototype. **Stage 0 has not received final acceptance. Stage 1 static rendering has been manually accepted, and basic movement plus the right-shoulder third-person camera are now authorized and implemented.** Controls and camera feel await manual acceptance. Stage 2 and combat remain unapproved and unimplemented. This document distinguishes confirmed rules, provisional parameters, future implementation ideas, unresolved questions, and actual implementation. Combat design decisions are not implemented features.
+A Godot third-person cinematic gunblade combat prototype. **Stages 1 and 2 and Stage 4 Steps 1–7 have passed initial manual acceptance. Stage 4 Step 8: rapid directional enemy test bursts is authorized and implemented, awaiting manual acceptance.** Stage 3 visual presentation is postponed, not cancelled. Walking 2.0 m/s and running 3.5 m/s remain the accepted, adjustable baseline. Stage 0 has no explicit final acceptance; further work needs approval. Enemy bursts are temporary greybox timing tests, not formal AI. Pose matching, real clashes and damage prevention remain separate; no Bind/resources/IK is implemented.
 
 ## Project Vision
 
@@ -279,7 +279,7 @@ Future damping or input response must expose an editable Godot **Curve** resourc
 
 ## Current Implementation
 
-Initial inspection: 2026-10-13. Stage 1 now includes the accepted static greybox, basic camera-relative player movement, walk/run toggle, and a controllable right-shoulder perspective camera. The enemy remains static. The table describes current implementation; historical inspection and static checks are retained separately. No combat or weapon animation is implemented.
+Initial inspection: 2026-10-13. Stages 1 and 2 and Stage 4 Steps 1–7 are initially accepted. Step 8 replaces the slow enemy rhythm with stationary deterministic Thrust/Left Cut/Right Cut bursts and changes enemy-to-player test damage to 5 HP. Player attacks, locks, movement/camera, defense, HP maximum and bounded matching remain. No formal AI, pursuit, reactions, Stamina/Posture, Bind, instinctive defense or skeleton IK is implemented.
 
 | Item | Observed state |
 | --- | --- |
@@ -287,11 +287,11 @@ Initial inspection: 2026-10-13. Stage 1 now includes the accepted static greybox
 | Local engine | `--version` returned `4.7.2.stable.steam.ed1daf0bf` |
 | Project feature markers | `4.7`, `Forward Plus` |
 | Application name | `Wuwaproject`; renaming remains open |
-| Rendering/physics | Forward Plus, Windows `d3d12`, `Jolt Physics`; static rendering manually confirmed after the Step 1 camera correction, new camera presentation still pending acceptance |
-| Scenes/scripts | Arena, reusable actor/gunblade, and `scenes/camera/third_person_rig.tscn`; `scripts/player_controller.gd` on the player instance only and `scripts/third_person_camera.gd` on the rig. No skeleton or animation system |
+| Rendering/physics | Forward Plus, Windows `d3d12`, `Jolt Physics`; controls, HP, defense/motion, clashes and matching accepted; directional bursts awaiting review |
+| Scenes/scripts | Existing nodes/scripts expanded with bounded burst scheduling and two enemy cut paths; no new gameplay files/assets or AI framework. Dimensions and initial positions retained |
 | Assets | Native primitive meshes, simple embedded materials, marker nodes, and labels; default icon retained. No imported actor models, textures, or custom shaders |
-| Input/systems | Minimal movement/look/walk-run/mouse-capture Input Map. Camera-relative CharacterBody3D movement and orbiting shoulder camera exist. No Autoload, plugins, combat, AI, weapon detection, shooting, trail, jump, dodge, or soft lock |
-| Tests/export | `tests/smoke_test.gd` performs 56 input/physics/camera checks; import and startup checked. No CI or export presets |
+| Input/systems | Existing inputs/F4 retained; Q / L1 / LB adds active defense. F7 resets both lives, motions and defense. No formal AI/reactions, shooting, instinctive defense/resources, dodge, Bind, Force, durability, execution, trail, or soft lock |
+| Tests/export | `tests/smoke_test.gd`: 438 checks passed, retaining previous 362 with historical single-thrust/25 HP fixtures and adding 76 burst/current-damage checks. Import/loading/headless startup passed; no CI/export presets |
 | Repository support | Git, `.editorconfig`, `.gitattributes`, `.gitignore`; working tree clean before initial inspection |
 | Local cache | Git-ignored `.godot/` editor/import caches are not game implementation |
 
@@ -347,23 +347,269 @@ Select `TestArena/ThirdPersonRig` in the Inspector to adjust:
 
 Camera3D uses Perspective, FOV 70°, near 0.08 m, far 50 m. SpringArm uses a 0.15 m sphere and 0.1 m collision margin. These camera and smoothing values are initial tuning, not finalized composition. Player speeds and turning response can be edited on `TestArena/Player`. No camera manager, soft lock, target selection, shoulder switching, cinematic camera, or Bind camera is added.
 
-Implemented controls: WASD / left stick move, Shift / L3 toggle walk/run, mouse / right stick look. Left-click the game viewport to capture the mouse; Esc releases it, and focus loss releases it as well. Mouse starts visible; a click captures it. Left-click performs no attack. Only these 11 necessary actions are mapped; combat and jump inputs are absent. Physical gamepad and native-window mouse behavior remain manual checks.
+Implemented Stage 1 movement and camera controls remain unchanged: WASD / left stick move, Shift / L3 toggle walk/run, mouse / right stick look, first left-click capture, Esc/focus-loss release. After capture, left-click now requests one ordinary visual motion as authorized for Step 2. The four temporary selectors/debug request and one ordinary request are the only motion inputs added; no full combat mappings exist. Physical input and new transition feel remain manual checks.
 
 Automated verification on 2026-10-13: editor import and main-scene short startup passed without parse/resource/runtime errors. The headless smoke test passed **56 checks** covering resource loading, active perspective camera, default offsets and left-of-center neck projection, initial enemy projection, keyboard/controller mappings, absence of combat/jump actions, walking/running distances, toggling, camera-relative movement after yaw changes, realized-motion facing, floor/enemy collision, static enemy, follow convergence, stick rotation/pitch clamps, mouse look math, self-collider exclusion (including a centered sweep), shoulder preservation after body rotation, and arm retraction/restoration against a temporary test-only wall. The wall is not part of the arena file. Native mouse capture cannot be validated by the headless dummy display; only its mappings and look calculations are covered. Log: `.godot/stage1-controls.log` (ignored).
 
-Manual acceptance remains required: F5/F6 rendered startup; actual WASD/left-stick input and Shift/L3 switching; physical right-stick and mouse capture/release/focus behavior; smooth turns and follow; right-shoulder composition across yaw/pitch and aspect ratios; obstacle avoidance near the floor and enemy, including lack of jitter/undesired self-retraction; and overall sensitivity/smoothing feel. The finite floor has no arena walls: stepping off its edge can cause a fall, with no respawn system added. Do not interpret the automated projection/obstruction tests as visual or feel acceptance. Await acceptance before further work; Stage 2 is not authorized.
+The user has completed initial Stage 1 manual acceptance and accepted **walk 2.0 m/s / run 3.5 m/s** as the current debugging baseline. Do not revert to the earlier 1.0 / 2.5 values without authorization; these remain future tuning parameters, not immutable final speeds. Movement, camera settings and their scripts are unchanged by Stage 2 Step 1. The finite floor still has no arena walls or respawn; walking off its edge can cause a fall. Broader device/aspect-ratio and obstruction refinement remains subject to manual review, not implied by headless tests.
+
+### Stage 2 Step 1: Greybox Weapon Motion Demo
+
+`Player/WeaponMotionDemo` drives only `VisualRoot/RightHand.transform` using physics-mode Godot Tween interpolation with sine easing. The gunblade remains a child of that hand with an unchanged identity grip transform; both hand and weapon move together. Body, left hand, actor root, collision, weapon dimensions, movement and shoulder camera are unchanged. This is a small set of single-handed visual poses, not a formal attack system.
+
+Idle Guard tilts the blade forward 25 degrees with a small wrist angle. Thrust uses a short preparation followed by forward grip extension and a forward-pointing blade. Short Cut uses a compact cross-body sweep; Broad Cut uses a wider lateral preparation, forward arc and cross-body finish. Each ends with a smooth Return to guard. Accepted new requests stop the previous Tween at its current pose and transition from there, without resetting to Idle first. Scene entry also blends from the existing greybox pose. Step 2 adds the lightweight selection and shared request windows below; the original motion poses and durations remain unchanged. There is no input buffer, target acquisition or root motion.
+
+Temporary debug controls (selection alone does not perform a motion):
+
+| Action | Keyboard | Controller |
+| --- | --- | --- |
+| Select Thrust (default) | 1 | D-pad left |
+| Select Short Cut | 2 | D-pad down |
+| Select Broad Cut | 3 | D-pad right |
+| Force selected motion once | V | Square / Xbox X is now reserved for ordinary selection |
+
+Holding a request does not repeat motions. The original `1 / 2 / 3 + V` debug scheme remains; D-pad selectors still work but do not fire an action. Square/X now exclusively requests ordinary selection, avoiding simultaneous normal/debug execution. These temporary meanings do not implement dialogue or a full combat input system. Motions can be requested while standing, walking or running. Weapon overlap has no gameplay effect.
+
+All poses/timings are initial presentation choices, not confirmed attack windows or combat tuning. Preparation/strike durations are Thrust 0.12/0.14 s, Short Cut 0.10/0.14 s, Broad Cut 0.18/0.16/0.18 s across three poses; Return defaults to 0.30 s and can be edited on `Player/WeaponMotionDemo`. No bones, IK, authored move database or general state machine is introduced.
+
+Automated verification: import and short main-scene startup without resource/script errors; **87 smoke-test checks passed**, including all earlier movement/camera checks at the accepted speeds. New checks cover three motion excursions, larger Broad Cut excursion, forward thrust reach, bounded frame-to-frame position/rotation changes, exact return to guard, hand/weapon attachment, unchanged actor root/collision/left hand, interruption from current pose, temporary selector/request input, single-request behavior while moving, and static enemy. These sampled bounds are mechanical checks, not proof of visually natural motion.
+
+The user completed initial Step 1 visual acceptance and subsequently accepted Step 2 selection, transitions and input handling. Broader visual refinement remains manual work, rather than proof that every possible interrupted transition is final.
+
+### Stage 2 Step 2: Basic Selection and Transitions
+
+An ordinary input submits one request, without requiring manual move selection. `WeaponMotionDemo` reads a single Inspector-configurable static reference (`Reference Target Path`, default `../../Enemy`), calculates horizontal actor-origin distance and the angle from actor -Z forward, and chooses only among the existing three motions. This is a geometric test reference, not soft lock or a target manager. It does not rotate, move or pursue the actor, track the enemy, or add enemy behavior.
+
+Temporary selection rules, editable on `Player/WeaponMotionDemo`:
+
+| Condition | Initial thresholds | Choice |
+| --- | --- | --- |
+| Near and directly ahead | Distance ≤1.6 m, angle ≤20° | Thrust; if a previous Thrust is still playing, choose Short Cut instead |
+| Medium range, broadly ahead | Distance >1.6 m and ≤2.8 m, angle ≤55° | Broad Cut; if a previous Broad Cut is still playing, choose Short Cut instead |
+| Otherwise | Off-axis, far away, missing reference, or coincident origins | Short Cut into the current forward space |
+
+The simple active-motion check uses the existing Tween and last accepted motion, with no combo history, scoring, randomness, or general state machine. Distances/angles are demo tuning, not confirmed combat range rules. At the initial 3 m spacing, the ordinary fallback is Short Cut; approach the static enemy to test other bands.
+
+Normal and forced-debug requests share `request_motion()` and exactly the same pose executor. Each accepted motion starts its own no-buffer lock: **Thrust 0.26 s, Short Cut 0.24 s, Broad Cut 0.30 s**. These Inspector values remain adjustable within 0.2–0.3 s. Requests during the window are completely discarded, including debug V requests, with no queued replay. A fresh request after the window may replace the remaining motion/return, smoothly starting at the current hand transform. No dedicated cancel command or combo system is introduced. If simultaneous normal/debug requests occur, the first accepted request starts the shared lock and the other is rejected; they cannot stack Tweens.
+
+Input mapping: **left-click while captured or Square / Xbox X** = ordinary request; **1/2/3 + V** = force a named motion. The camera now consumes left-click only when it captures a visible pointer; that first click does not also request motion. Once captured, the event reaches the motion driver. Esc still releases the mouse; controller ordinary input does not require mouse capture. There is one ordinary action (`ordinary_motion_request`) and no new defense/shoot/dodge/ability mappings. The camera edit is limited to this capture-event guard; camera geometry, controls and parameters are unchanged.
+
+Verification on 2026-10-14: **105 smoke-test checks passed**, retaining all movement/camera and existing-motion checks. New coverage includes exclusive Square/left-click mapping, uncaptured click suppression, close/medium/off-axis/far/missing-reference choices, active-motion selection, one event/one request without hold-repeat, shared debug/ordinary locking, rapid request rejection, no buffered replay, acceptance after lock expiry, current-pose transition, and no automatic actor motion or enemy behavior. Editor import and short main-scene startup also passed. These checks do not validate a real captured mouse window or the visual quality of interrupted arcs.
+
+Step 2 has passed initial manual acceptance. Its ordinary/debug inputs, temporary selection thresholds and 0.26/0.24/0.30 s no-buffer locks are retained without change in Step 3. The trajectory display below supports further review of arcs and interrupted transitions; it does not expand combat scope.
+
+### Stage 2 Step 3: World-Space Weapon Trajectory Verification
+
+`WeaponTrajectoryDebug` reads the existing gunblade `Grip`, `BladeBase` and `BladeTip` Marker3D global positions. Blade direction is the normalized world-space vector from base to tip, so it follows the actual hand/weapon Transform rather than being inferred from actor facing. Grip is the real hand-centered weapon origin; the base/tip span remains 1 m. No new weapon model, component framework, collision shape or hit query is added.
+
+Each accepted ordinary or forced-debug request emits a start ID and motion type from the shared executor. The observer immediately records the actual start pose, then samples after each physics tick via a deferred read, after player movement and the physics-mode motion Tween. Samples contain physics frame, grip/base/tip world coordinates, blade direction and a start/frame/end tag. Return-to-guard is included. A completed Tween closes the record with `completed`; replacement by a post-lock request closes it with `interrupted`, samples the current pose and begins the new record at that same pose. Rejected lock-period inputs create no record. Initial scene-entry guard blending is not an attack request and is not recorded as one.
+
+Records remain in memory only. Defaults retain the latest 8 requests and at most 256 samples per request. On sample overflow, the explicit start and newest/end samples are retained and the record is marked `truncated`; this is a bounded diagnostic history, not a disk archive. Adjacent tip displacement produces `max_step` and `jump_samples` warnings above an Inspector-adjustable 0.5 m per-sample diagnostic threshold. This threshold is not a hit test or a final continuity rule: movement speed, rotation and physics sampling rate affect displacement and must be considered when reviewing warnings.
+
+**F4 toggles the display**, which defaults off. It can also be set with `Debug Display Enabled` on arena-root `WeaponTrajectoryDebug` in the Inspector (use Remote Inspector during play). `Retained Requests`, `Max Samples Per Request`, `Blade Snapshot Stride` (default 4) and `Jump Warning Distance` are adjustable. Recording continues while the display is off; the debug mesh and legend are hidden and no line redraw is performed.
+
+Native ImmediateMesh lines render world-space data without following the moving actor. Cyan/orange/violet tip polylines identify Thrust/Short Cut/Broad Cut; darker base-to-tip segments show sampled blade placement. Green crosses mark request starts, red crosses mark completed/interrupted ends. Current grip is yellow, base/tip are white, and a yellow extension indicates actual blade direction. These remain development lines, not Stage 3 Sword Trail. Stage 4 adds separate contact query results to the legend and short pink markers below; the polylines themselves never determine contact.
+
+Verification on 2026-10-14: **136 checks passed**, retaining all prior 105. The 31 new checks cover actual marker positions/direction and 1 m span, independent request IDs/types, completed start/end records, sampled displacement bounds for all three motions, interruption reason and matching end/start coordinates, absence of records for rejected requests, F4 mapping, display/legend toggles and line generation, world-space mesh coordinates, moving-action endpoint and actor displacement, recording with display off, bounded recent history and preserved speeds. Import and main-scene short startup passed without resource/script errors. In the moving-endpoint test, comparison is made when the action actually ends; later walking is correctly outside that action's record.
+
+The user completed Stage 2 and Stage 4 Steps 1–7 initial manual acceptance. Step 8 directional bursts await review. Stage 3 presentation remains postponed rather than cancelled.
+
+### Stage 4 Step 1: Basic Swept Weapon Contact Diagnostics
+
+The arena adds `Enemy/DebugContactRegion`, an Area3D with a 0.25 m radius, 1.7 m high cylinder centered 0.85 m above the enemy origin. It follows the enemy's actual Transform, matching the existing cylindrical body. Collision layer 2 is dedicated to this diagnostic region; its mask is zero and overlap monitoring is disabled. Existing CharacterBody collision on layer 1 is unchanged. This is one simple debug region, without body-part distinctions or a formal hurtbox system. Step 3 stores HP separately on `Enemy/DebugHealth`.
+
+`WeaponContactDebug` subscribes to actual trajectory samples. Each includes sword base/tip world positions and the actual weapon rotation. It constructs a capsule along the blade, radius 0.012 m and height equal to the measured blade span (1 m at current scale). Between adjacent samples, interpolate base translation and weapon quaternion rotation, choosing subdivisions from the maximum endpoint travel and a conservative rotation/length travel bound. The default step is 0.01 m, capped at 512 subdivisions per sampled segment. Each subsegment uses a native capsule translation sweep plus overlap checks at interpolated poses. Starting overlap is explicitly checked because native motion casts ignore it. Rotating poses are checked rather than relying only on tip rays or frame endpoints.
+
+All three motions use this same algorithm. Actor-center distance and move type never declare contact. Queries include only areas on layer 2 and require the returned collider to be the configured enemy region, excluding player/ground bodies. The detector runs even with F4 hidden. Physical Contact checks the full recorded request, including preparation and return; Step 2 separately checks Valid Attack Contact within the active interval below. Motion selection, input lock windows and visual trajectories are untouched.
+
+On first physical contact, a `contact_detected` signal emits a Dictionary with `request_id`, numeric `motion`, `motion_name`, enemy `target`, `target_path`, world-space `position`, `physics_frame`, surface `normal`, and `contact_kind: physical`. The contact point comes from the native shape query. Later samples still advance the trajectory and valid-window queries, but do not emit another physical event for that request/target. A new accepted request resets both contact flags and the previous sample, preventing sweeps across unrelated requests. The last 32 physical events are retained in memory and logged as `WEAPON_CONTACT`. Physical events themselves cause no damage or enemy response.
+
+F4 retains all trajectory lines and a **pink physical-contact cross**, default lifetime 1.2 seconds. Physical status is attached to its request record. Pink markers are separate from red trajectory-end crosses and appear only after a real physics query, not merely because the sword looks close. Turning F4 off hides the entire line mesh and legend; recording continues, and markers expire while hidden. Lifetime is editable on `WeaponTrajectoryDebug`; blade radius, sweep step and subdivision cap are editable on `WeaponContactDebug`. Step 2 adds lime valid-contact markers and separate statuses below. These are diagnostic parameters, not final combat rules or effects.
+
+Verification on 2026-10-14: **162 checks passed**, preserving all previous 136. Added checks exercise real Thrust/Short Cut/Broad Cut contacts, event contents/request association, per-request first-contact deduplication and next-request contact, real misses, near misses, cylinder height, self-body exclusion, region translation/rotation, moving contact, marker/status display, hide/expiry behavior, and no subdivision-cap overflow for tested normal motions. Synthetic fast translation and rotation cases have nonintersecting endpoint blades but detected intermediate contact, specifically testing the skipped-frame-space problem. Enemy repositioning for these test cases is test-only; the arena enemy's appearance and start position are unchanged. Editor import and short main-scene startup passed without resource/script errors.
+
+Limits: this is a thin-capsule approximation with 0.0005 m numerical query margin, discrete frame sampling and adaptive interpolation, not an exact continuous rigid-body solver. Subsegment translation casts hold orientation fixed while endpoint overlap checks approximate rotation; very shallow grazes may differ at the step/tolerance scale. Between-frame translation/rotation is inferred from actual endpoint transforms; an unobserved path that departs from that interpolation is not reconstructed. Motion exceeding the subdivision cap produces a warning and reduced precision, not a guarantee of detection. Current support is a single static cylindrical target and the existing unit-scale blade; no moving-target relative sweep, blockers, weapon-versus-weapon contact, or body-part system is implemented.
+
+The user completed initial manual acceptance of Step 1 spatial contacts and F4 feedback. This does not establish final contact precision or visual presentation; the geometric limitations above remain.
+
+### Stage 4 Step 2: Active Attack Windows
+
+Physical Contact means actual blade/body overlap during any recorded phase. Valid Attack Contact requires a real swept contact during the current request's active playback interval; preparation and return never produce valid events. Windows read `Tween.get_total_elapsed_time()` from the same physics Tween driving the hand, without a separate attack timer or changes to authored poses/timing.
+
+| Motion | Active window in playback seconds, start inclusive / end exclusive | Total playback with default return |
+| --- | --- | --- |
+| Thrust | [0.12, 0.26) | 0.56 s |
+| Short Cut | [0.10, 0.24) | 0.54 s |
+| Broad Cut | [0.18, 0.52) | 0.82 s |
+
+These are temporary greybox values, editable as X = start and Y = end on `Player/WeaponMotionDemo`, under **Temporary Active Windows (Playback Seconds)**. Runtime bounds are clamped to the motion's existing strike phase: Thrust 0.12–0.26, Short Cut 0.10–0.24, Broad Cut 0.18–0.52 seconds. Reversed or zero-width ranges produce no valid interval. This prevents Inspector values from enabling preparation/return contacts. Input locks remain independently unchanged at 0.26/0.24/0.30 seconds, with no input buffering.
+
+Trajectory samples include playback time, effective window bounds, live-request and active-window flags. If a sampled frame span crosses a boundary, only its time-overlapping portion is checked for valid contact. Blade base, quaternion rotation and length are interpolated using the same geometric sweep model as physical queries; physical contact time alone is never used to declare validity. The end bound is exclusive (a 1-microsecond exclusion is used for the sampled sweep endpoint). The existing interpolation/tolerance limitations still apply at very narrow windows and shallow grazes.
+
+`valid_attack_contact_detected` emits the same identity/spatial/frame fields as physical contact, plus `contact_kind: valid_attack` and an interpolated `playback_time` within the window. Its separate last-32-event history logs `VALID_ATTACK_CONTACT`. Physical and valid contacts have independent once-per-request/target flags. An outside-window physical contact does not spend the later valid opportunity, including continued overlap. A replacement closes the old live window before emitting its end sample, then starts a fresh request at playback zero; completion also closes it. A final end sample may resolve the legitimate preceding swept interval, but grants no new instantaneous or subsequent contact after closure. No previous request's samples or deduplication flags carry into a new request.
+
+F4 shows all three configured intervals, current playback time, effective bounds and **ACTIVE / CLOSED**. The live blade is lime while active and white otherwise. Pink crosses indicate Physical Contact; larger lime crosses indicate Valid Attack Contact, with separate latest-request statuses. Both categories expire and the complete mesh/overlay is hidden when F4 is off. Existing ordinary input and 1/2/3 + V remain unchanged.
+
+Verification on 2026-10-14: **217 checks passed**, preserving all previous 162 and adding 55 active-window checks. These cover the three independent intervals and actual contacts, Tween-derived time, valid event identity/time, inactive preparation/return, completion/interruption and fresh replacement timelines, separate physical/valid deduplication, an outside-window contact followed by a valid contact, repeat requests, exclusive end, closed-request rejection, boundary-clipped fast sweeps and spatial misses, Inspector narrowing/clamping/reversed bounds, and F4 state/category/hide/expiry checks. Editor import and headless Main Scene startup passed without resource/script errors.
+
+The user completed Step 2 manual acceptance of active-window feedback and contact behavior. Step 2 introduced no damage or HP; Step 3 now subscribes to its valid contact signal below. The geometric approximation limits remain, and headless checks cannot establish final visual timing or control feel.
+
+### Stage 4 Step 3: Minimal Enemy HP and Damage Validation
+
+This is a temporary greybox loop: **Valid Attack Contact → enemy HP deduction → Dead at zero**. It does not approve final injury, damage balance, death animations or enemy death rules, and does not alter confirmed combat design above.
+
+`Enemy/DebugHealth` is a small Node using `scripts/static_enemy_health.gd`. Inspector parameters are **Max HP = 100** and **Test Damage = 25**, shared by all three existing motions. Initial HP equals the configured maximum. The maximum has a positive minimum of 1; negative damage is clamped to zero. HP is read-only externally and remains within [0, Max HP]. Lowering the maximum clamps current HP; increasing it neither heals nor revives the enemy. Explicit debug reset fills the configured maximum.
+
+The node subscribes only to `WeaponContactDebug.valid_attack_contact_detected`, checks `contact_kind: valid_attack` and the actual target identity, then subtracts the configured damage. No independent distance, animation-time or visual-overlap damage test exists. Physical Contact never deducts HP. In addition to the detector's existing deduplication, the HP receiver remembers damaged request IDs for the current debug life, preventing duplicate delivery from deducting twice. New requests may damage again. F4 only controls drawing; damage continues while it is off. Actual removed HP is retained as `last_damage` and logged as `DEBUG_ENEMY_DAMAGE` with request ID, HP/maximum and Dead status; overkill reports the remaining HP removed rather than the full configured value.
+
+At zero HP, `Dead` becomes true and all subsequent damage is rejected. The node, model, contact region and movement collider remain in place; only the enemy body receives a local dark-gray material override. Shared meshes/materials and the player are unaffected. There is no death animation, reaction, knockback, ragdoll, execution, automatic respawn or victory flow. Geometric contact diagnostics may still register against the retained dead model, but they cannot remove additional HP.
+
+F4's development overlay shows **Enemy HP / Max HP**, **Last damage**, **Dead**, and a **Debug Only F7 reset** reminder. All this text hides with F4. Step 4 extends F7 to both actors and cancels active temporary motions before reset, without changing either actor's position. Reset excludes previously accepted requests, so new requests are required before further damage. F7 uses a simple unhandled key event; existing attack mappings and the Input Map are unchanged.
+
+Verification on 2026-10-14: **254 checks passed**, preserving all previous 217 and adding 37 HP/damage checks. New coverage includes initial values and absence of player HP, physical-only overlap, valid contact damage with F4 hidden, duplicate signal/overlap rejection, new requests, target/kind filtering, actual four-hit attacks across all three motions, legal HP bounds, Dead/node retention and isolated material tint, unchanged transforms/collision, subsequent dead-target rejection, F4 text visibility, no automatic revival, F7 reset, old/current request exclusion, configurable maximum and damage, overkill, zero/negative damage, maximum clamping, and fresh post-reset attacks. Editor import, scene loading and headless Main Scene startup passed without script/resource errors.
+
+The user completed Step 3 manual acceptance of the temporary enemy HP/death/reset loop. Its 100 HP and 25 damage remain test values. Step 4 extends the environment to reciprocal damage below; headless checks do not establish rendered color/text readability or input feel.
+
+### Stage 4 Step 4: Stationary Enemy Thrust and Player HP (Historical Rhythm)
+
+The following 2 s cooldown and 25 HP incoming-damage values record the original Step 4 acceptance. Step 8 replaces them with short burst rhythm and **5 HP** incoming damage; player Max HP remains 100. The old single-thrust description is historical, not a second active enemy behavior mode.
+
+This is reciprocal greybox validation, not formal enemy AI or final damage/death balance. `Enemy/DebugAttack` uses one lightweight physics Tween thrust: 0.25 s preparation, 0.25 s extension, 0.30 s return to single-hand guard. It never moves the enemy root. In range, the enemy rotates toward the player's current position at a bounded angular speed while idle; rotation stops during the swing. There is no snapping, mid-swing homing, pursuit, navigation, move selection, attack combination or behavior tree. Being in range only permits a request; it never declares damage. Leaving range allows an already-started attack to finish but prevents new requests. Either actor being Dead prevents enemy attacks; enemy death immediately cancels its current attack.
+
+| Inspector location | Temporary default | Meaning |
+| --- | --- | --- |
+| `Enemy/DebugAttack` — Enabled | true | Can disable the test attacker |
+| Attack Interval | 2.0 s | Cooldown after completion/cancellation; initial wait also uses this value |
+| Attack Distance | 1.6 m | World-space origin distance permitting a new request |
+| Turn Speed Degrees | 90°/s | Maximum idle facing change |
+| Active Window | X=0.25, Y=0.50 s | Tween playback interval, start inclusive/end exclusive; clamped to extension phase |
+| `Player/DebugPlayerHealth` — Max HP | 100 | Initial/reset maximum, minimum 1 |
+| Incoming Test Damage | 25 | HP removed per valid enemy request, minimum 0 |
+
+The existing `weapon_contact_debug.gd` is instantiated as `Enemy/DebugAttack/EnemyBladeContact` with automatic player-trajectory subscription disabled. Only its target path and query mask are configured differently. It samples the enemy weapon's actual BladeBase/BladeTip transforms and quaternion after physics/Tween updates, uses the same adaptive capsule sweep and active-interval clipping, and emits the same physical/valid event structure with separate enemy request IDs. A 0.25 m radius, 1.7 m tall `Player/DebugContactRegion` follows the player's actual Transform on layer 4. Player attack queries retain layer 2, and enemy queries use only layer 4, excluding enemy/self/ground bodies. Per-request physical and valid deduplication remain separate. Existing sweep approximation limits apply, including discretized rotation and inferred between-frame paths; this is not exact relative CCD for moving targets.
+
+`Player/DebugPlayerHealth` receives only valid enemy contact events for the player and independently deduplicates request IDs. HP stays in [0, Max HP]; overkill reports actual removed HP. At zero, temporary Dead freezes movement/velocity, rejects ordinary and debug attack requests, and cancels the current player motion and enemy attack. No death animation, injury reaction, revive flow or Game Over UI is added; the camera remains operable. Dead players cannot deal damage through a cancelled motion's final diagnostic sample. Enemy HP, death tint and the three player motions remain as before.
+
+F4 adds **Player HP / Max HP**, **Last injury** and **Dead** alongside the existing enemy readout. Hidden debug does not stop either attack/damage path. F7 restores both lives and last-damage values, restores the enemy material, clears player velocity/run toggle/input lock, cancels both active motions and restarts enemy cooldown. It preserves positions/facing; the enemy returns to guard, and future player motions continue from the retained hand pose. Old/current requests cannot be replayed after reset. This is Debug Only, not a respawn design or new formal attack mapping.
+
+Verification on 2026-10-14: **287 checks passed**, retaining the previous 254 and adding 33 stationary enemy attack/player HP checks. Historical checks disable the periodic attacker only inside the test fixture to isolate previously accepted behavior; the normal scene enables it. The earlier enemy-only HP-node check now explicitly describes the unchanged enemy node rather than claiming that player HP is absent. New coverage includes default player HP/damage, outside-range inactivity, periodic in-range requests, fixed enemy origin, actual weapon contacts, exit-range misses and no new requests, four distinct thrusts/once-per-request damage, legal HP bounds, player Dead movement/attack rejection, enemy stopping against Dead players, both F4 readouts/hiding, both-life F7 reset/lock cleanup, restored movement, preparation/return-only overlaps, duplicate valid-event rejection, self-region exclusion, bounded turn rate, frozen swing heading, and enemy death cancellation/future inactivity. Editor import, scene loading and headless Main Scene startup passed without resource/script errors.
+
+The user completed initial Step 4 manual acceptance of stationary thrust, reciprocal damage, death and reset. Step 5 adds the temporary player active defense below; enemy actions and contact/HP parameters remain unchanged. Headless checks do not establish final rendered swing/contact readability or input feel.
+
+### Stage 4 Step 5: Basic Active Guard and Perfect Parry
+
+`Player/DebugDefense` uses `scripts/debug_player_defense.gd`. The only added Input Map action is `active_defense`: **L1 / Xbox LB** and temporary keyboard **Q** (physical key). Neither binding overlaps existing movement, camera, attack or debug actions. Press starts **Perfect Parry**, default **0.15 s**; remaining time decreases on physics ticks. Keeping the same press never renews it: after expiry the state becomes **Held Guard**. Release immediately removes defense when input is processed. Dead players cannot defend. Inspector exposes **Perfect Window Seconds** and **Defense Half Angle Degrees**, default **60° per side** (120° full cone); the editor range remains below 90° per side so rear sources cannot be guarded. These are temporary tests, not replacement values for the formal defensive timing/resource design.
+
+The player HP receiver resolves defense only after a real **Valid Attack Contact** from the existing enemy blade sweep. Windup/return physical overlap and proximity alone never produce a block/parry. Facing uses the horizontal direction from the player origin to the actual attacking enemy origin, compared with the player's actual -Z forward. No automatic turn, face-target or soft lock is added. This is a minimal source-facing filter over blade/body contact, not weapon-versus-weapon interception, defense animations or full sword alignment.
+
+Within the frontal cone, a held press with positive parry time yields **Perfect Parry**; a held press after expiry yields **Block**. Either prevents the whole test damage and sets the latest injury to **0 HP**. No press, rear/out-of-cone source, or otherwise unavailable defense yields **Failed** and ordinary HP deduction. The HP receiver consumes the enemy request ID before resolving defense, so a blocked request cannot damage later through duplicate delivery or after release. Both successful outcomes have no Stamina/Posture cost in this test. No instinctive defense, guard break, enemy stagger, disarm, retaliation reward or execution is included.
+
+Defense has physics priority before player attack input, and the common attack entry also refreshes defense input. Both ordinary and forced debug requests are discarded while defending; no buffer is created. A fresh defense press immediately cancels an existing player Tween and closes its active window, retaining the current hand pose as the beginning of Step 6's defensive transition. Its final trajectory diagnostic cannot deduct enemy HP once defense is active. The original **remaining 0.26/0.24/0.30 s request lock is preserved**, so releasing defense cannot bypass it; after lock expiry and release, a fresh attack request is required. No generic cancellation framework or new combo rule is added.
+
+F4 adds current **None / Perfect Parry / Held Guard**, precise-window remaining seconds, latest **Perfect Parry / Block / Failed**, prevented damage and latest injury (zero on success). Both HP readouts remain. F4 off hides this text without affecting resolution. F7 clears held/parry state and results alongside both HP/motion resets; if defense is still physically held through reset, release and press again to rearm. This prevents a held key from silently starting another perfect window after F7.
+
+Verification on 2026-10-14: **319 checks passed**, preserving all previous 287 and adding 32 active-defense checks. Added coverage includes Q/L1 binding and no conflicts, Inspector defaults, press/hold/release transitions without parry extension, ordinary/debug attack rejection and no buffering, real-cylinder valid-contact parry/block versus rear/unguarded damage, prevented HP, lethal failed defense and Dead gating, timed parry and long-held block against the full existing enemy thrust, F4 state/result/zero injury and hiding, current-motion cancellation with unchanged hand pose and preserved input lock, fresh post-lock attacks, adjustable cone without auto-facing, zero-duration parry, F7 state/record cleanup and release-to-rearm. Editor import, scene loading and headless Main Scene startup passed without script/resource errors.
+
+The user completed initial Step 5 manual acceptance of Q/L1 defense and damage prevention. Step 6 adds primitive visual transitions and independently observes blade contact below; it does not replace these accepted damage conditions.
+
+### Stage 4 Step 6: Defense Motion and Blade Contact Diagnostics
+
+`DebugDefense` owns a small physics Tween while raising/holding/returning the right hand. A press transitions from the current hand pose toward the short parry pose in 0.06 s, then settles into Held Guard in 0.09 s. A zero parry duration goes straight to guard. Release returns to existing Idle Guard in 0.20 s. New transitions kill only the previous defense Tween and retain its current transform; an accepted player attack stops any unfinished visual return before continuing the existing attack executor. The weapon remains a child of the hand with its original local transform. No bone, IK, AnimationTree or imported animation asset is added.
+
+| Temporary pose in player local coordinates | Hand position (m) | Hand rotation (degrees) |
+| --- | --- | --- |
+| Short parry | (0.22, 1.14, -0.62) | (-55, 0, 70) |
+| Held Guard | (0.30, 1.08, -0.42) | (-65, 0, 65) |
+
+These pose vectors and Return Seconds are editable on `Player/DebugDefense` under **Temporary Defense Poses**. They are experimental coverage poses, not approved sword techniques. The 0.15 s precise window, ±60° cone, Q/L1, original request locks, HP/damage and enemy thrust are unchanged. A canceled player attack begins defense from its current pose, without snapping to Idle first.
+
+`BladeClashDebug` reads both weapons' actual BladeBase/BladeTip world transforms and rotation quaternions. Between paired samples it interpolates each base, quaternion and blade length at the same time fractions. A conservative travel bound combines both blades' base translation and rotation/length travel; the default 0.005 m subdivision step is capped at 1024. At each subdivision, closest points between the two blade segments are checked against their combined thickness (default radius 0.012 m each). A detected event reports the midpoint of these closest points as the approximate thickness contact location. Fast translation, rotation and simultaneous blade movement are considered, rather than only frame-end poses, character distance or defense state.
+
+Detection runs during each complete enemy request, including preparation/return, and emits at most one independent `blade_clash` event per enemy request. Fields include `request_id`, world `position`, `physics_frame`, sample `fraction` and current `defense`. The last 32 events remain in memory. It runs before the existing enemy/body query at each actual physics sample, so a lethal body contact does not suppress that frame's earlier blade observation. No hit reward, weapon redirection, sustained lock or Bind is produced.
+
+This is a thin-segment/capsule approximation and adaptive sampled sweep, not an exact rigid-body contact solver. Quaternion/base interpolation infers the unobserved path; tiny grazing contacts may differ at the subdivision/thickness scale. Reaching the cap warns and reduces precision. The returned position represents approximate overlap of the modeled blade thickness, not a mesh triangle contact. Parameters are Inspector diagnostics on `BladeClashDebug`, not final collision/balance rules.
+
+For each enemy request, diagnostics separately retain blade clash, physical body contact, valid body contact, defense state at valid body contact, and final damage prevention (YES / NO / pending). **Step 5 body-contact plus frontal-angle defense remains authoritative**, even when no blade clash is observed. Blade contact never adds or removes HP and is not required for parry/block in this step. Coverage mismatches must be reviewed as pose/trajectory observations; they do not silently redefine defense or confirm formal sword contact rules.
+
+F4 uses **blue crosses** for blade clashes, **orange-red crosses** for enemy-blade/player-body contact and an **aquamarine segment** for the actual enemy blade. Existing player trajectory/body markers remain. The overlay separates clash/body/valid-body flags and final prevention from the current Perfect Parry/Held Guard status. All markers use the existing temporary lifetime and disappear with the shared mesh/overlay when F4 is off; sampling continues. F7 resets both lives/motions/defense as before, clears clash records and temporary contact markers, and smoothly returns the hand toward Idle. Holding through reset still requires release/repress.
+
+Verification on 2026-10-14: **345 checks passed**, preserving previous 319 and adding 26 motion/clash checks. The previous frozen-hand assertion now checks bounded first-frame movement because visible defense is explicitly authorized; other prior checks remain. Added coverage includes immediate pose continuity, visible raise, configured held pose, distinct parry/guard, hand attachment, smooth return and attack ownership after return interruption, static crossing/contact position, near miss, fast translation with missing endpoints, both-blade motion, rotational sweep, actual Marker transforms, event identity/once-per-request delivery, no HP side effect, F4 statuses/markers/hiding, F7 record cleanup, body/defense/final-result association and no tested subdivision overflow. Editor import, scene loading and headless Main Scene startup passed without resource/script errors.
+
+**Observed coverage mismatch:** with the enemy origin 0.24 m to the player's right and 0.9 m forward, a completed thrust against Held Guard recorded `blade_contact=false`, `body_contact=true`, `valid_body_contact=true`, `damage_prevented=YES`, and player HP remained 100. Thus this test pose does not physically intercept that blade trajectory even though the accepted angle/body-contact baseline blocks damage. The result is explicitly retained for visual/pose review; neither the damage rule nor the attack trajectory was changed to force agreement. It does not prove that every other pose/distance misses, nor that formal defense may ignore blades.
+
+The user completed initial Step 6 acceptance of defense motion and blade diagnostics, including the coverage discrepancy above. Step 7 addresses it below; the Step 6 discrepancy is retained as a historical baseline.
+
+### Stage 4 Step 7: Procedural Blade Contact Matching
+
+The confirmed direction is to retain reasonable defensive angle tolerance while adapting the weapon pose to the actual incoming blade. Future authored **Animation + IK** may replace this greybox layer. `Player/ContactMatchingDebug` uses `scripts/debug_contact_matching.gd` to correct only the existing right-hand Transform, never the character root, weapon attachment or attacker's motion. There is no skeleton, general IK solver or animation framework.
+
+Matching runs before independent blade/body queries on actual enemy physics samples, only when the player is alive and defending, the source is inside the existing ±60° cone, and enemy playback is in its existing active window. Actual enemy base/tip positions and observed tip displacement determine targets and incoming direction. Candidate contact points use the interior 10–90% of the enemy blade and 20–80% of the player's blade. Hand-local Marker offsets solve the required hand position. Candidate rotations retain the baseline basis or turn toward the target within the angular limit; selection favors small corrections and crossing the observed incoming motion.
+
+Targets must admit a bounded pose with hand height 0.8–1.75 m and the grip/entire blade forward of local Z=-0.28 m. Applied intermediate poses are checked too. This conservative front plane protects the cylindrical greybox; it is not a full anatomical self-collision solver. Translation and quaternion rotation approach the target at bounded speeds, without teleporting or changing blade thickness. Unreachable/unsafe poses record a failure reason and retain the existing defense result.
+
+| `Player/ContactMatchingDebug` Inspector parameter | Temporary default |
+| --- | --- |
+| Enabled | true |
+| Max Position Correction | 0.30 m from current matching baseline |
+| Max Rotation Degrees | 35° from that baseline |
+| Hand Speed | 3.0 m/s |
+| Rotation Speed Degrees | 360°/s |
+| Contact Hold Seconds | 0.08 s |
+| Recovery Seconds | 0.12 s |
+
+The defense Tween yields hand control on entry, retaining the current pose. Perfect Parry begins from its short raised pose and does not renew the 0.15 s window. Held Guard adapts as the actual attack approaches. Only an independently detected real clash starts the brief local-pose hold. After that single contact for the enemy request, matching stops tracking and smoothly restores guard. Release returns toward Idle as before; attack end, death, out-of-cone source and reset stop correction. This brief visual hold does not constrain the enemy weapon or create Bind, sustained tracking, pressure, rewards or new cancellation rules.
+
+**Matched** means the applied chosen player-blade point is within 0.01 m of the target. **Limited** means a feasible target is still approached under speed limits. **Failed** records no feasible safe pose or an out-of-cone source, with a reason. These pose outcomes are separate from real clash detection and damage prevention. Matching never emits Blade Clash; `BladeClashDebug` alone detects it at the unchanged 0.012 m radius. The accepted body-contact/angle baseline still determines blocked damage when matching fails.
+
+F4 adds activity, target world position (yellow cross while active), position/rotation correction, Matched/Limited/Failed and reason, alongside the separate real-clash and prevention flags. Hidden debug does not change behavior. F7 clears request/hold/target/correction data with the existing resets.
+
+Verification on 2026-10-14: **362 checks passed**, retaining all previous 345 and adding 17 matching checks. Historical tests disable only the new correction in their fixture; the normal scene enables it. Added coverage checks active response, real clash in the formerly uncovered stance, pose convergence, limits and per-frame continuity, front-body safety, root/attachment preservation, unchanged radius, unchanged guard result, recovery/no ongoing tracking, separate F4 states/hiding, F7 cleanup, zero-limit failure with baseline block preserved, rear rejection/damage, and unchanged timed-parry behavior. Editor import, scene loading and headless startup passed without errors.
+
+**Typical stance:** enemy origin 0.24 m right / 0.9 m forward, Held Guard: `blade_contact=true`, valid body contact true, damage prevented YES, HP 100. Measured maximum correction was approximately **0.0081 m / 11.93°**, maximum frame position step **0.0118 m**. This improves the Step 6 no-clash baseline without changing radius or damage. With position/rotation limits both zero, matching fails explicitly, real clash remains false, and the original Block still prevents damage. A later timed Perfect Parry test also prevented damage but recorded no real clash; safe bounded matching is not guaranteed for every timing. The 0.15 s window was not extended to force coverage.
+
+The user completed initial Step 7 acceptance and approved directional rhythm tests. Late-input coverage remains a limitation, not a reason to silently change damage rules. Step 8 keeps correction limits and uses each new enemy move's own active window.
+
+### Stage 4 Step 8: Rapid Directional Enemy Test Bursts
+
+This is temporary greybox attack pacing for defensive motion/matching review, **not formal enemy AI** or a player combo system. The enemy remains stationary and uses a predictable repeating **Thrust → Left Cut → Right Cut** order; groups of four/five continue the cycle without adjacent duplicates. Each sword gets a monotonically increasing request ID, separate body/clash record and valid-contact deduplication. There is no random selection, navigation, pursuit or new decision framework.
+
+| `Enemy/DebugAttack` Inspector parameter | Current test default |
+| --- | --- |
+| Sequence Length | 4 swords, editor range 3–5 |
+| Attack Gap Seconds | 0.15 s, editor range 0.10–0.20 |
+| Sequence Recovery Seconds | 0.80 s, editor range 0.6–1.0 |
+| Attack Distance / Turn Speed Degrees | Unchanged: 1.6 m / 90°/s |
+| Active Window (Thrust) | [0.25, 0.50) s |
+| Left Cut Active Window | [0.12, 0.32) s |
+| Right Cut Active Window | [0.12, 0.32) s |
+
+Thrust retains its original preparation/extension trajectory and uses a short 0.10 s follow-through bridge inside a group (0.60 s authored total). Left Cut sweeps from one side to the other; Right Cut reverses direction using different hand positions and rotations. Each cut uses 0.12 s preparation, 0.20 s strike and 0.10 s follow-through (0.42 s total). Their windows read the same motion Tween and clamp to each move's strike phase. Gaps start after actual playback completion, not an independent nominal-duration timer; physics-frame quantization may add roughly a tick to requested timing.
+
+Each new Tween begins from the actual current hand pose. Group attacks finish in follow-through instead of snapping to Idle. Only group completion/range-abort blends toward Idle over 0.25 s during the recovery interval. Idle/gap facing remains speed-limited and freezes during a sword; the enemy root never translates. Leaving range finishes the currently started sword and discards remaining group swords (or aborts immediately during a gap). No new group starts out of range. Enemy/player death, disabling the test attacker or F7 immediately cancels the current Tween and clears group/index state; reset starts a fresh recovery delay, without a queued sword surviving.
+
+`Player/DebugPlayerHealth` now defaults to **Incoming Test Damage = 5 HP**. Player Max HP remains **100**, and enemy HP/player outgoing damage remain **100 / 25 HP**. Only actual valid enemy body contact deducts HP, once per request; new requests can deduct independently. Preparation/return contact never damages. Perfect Parry and Held Guard retain their existing ±60°/0.15 s input rules and no resource cost; a held key never gains a refreshed parry from a new sword.
+
+The existing detector retains player motion labels but accepts explicit enemy labels, so enemy events identify Thrust/Left Cut/Right Cut correctly. `BladeClashDebug` keeps bounded per-request records (last 32), including move, start/end frames, body/clash flags and prevention. No sword collision is fabricated to guarantee a group presentation.
+
+Matching only changes how it reads active bounds: it asks the current enemy move for its window rather than assuming the old thrust interval. Position/rotation/speed/safety limits and the independent real-clash detector are unchanged. F4 adds current burst activity, sword index/count, move name and recovery/gap countdown alongside existing records. F7 also clears group and diagnostic histories. These changes do not establish a generic ability, animation or combat framework.
+
+Verification on 2026-10-14: **438 checks passed**, retaining previous 362 and adding 76 burst/current-damage checks. Historical fixtures explicitly use one sword and 25 HP incoming damage to preserve prior death/defense coverage; the normal scene uses the new defaults. New checks cover default 5 HP, actual 3/4/5-sword groups, independent IDs/records and cycle order, continuous hand position/rotation, fixed root, distinct ordered Left/Right trajectories, actual 5 HP body damage, per-request deduplication and named active windows, gap measured from actual completion frames, group recovery, held guard/expired parry, per-direction matching attempts, independent real clashes, F4 burst info/hiding, range exit, F7 cancellation/no stale sword and death cancellation. Godot editor import, scene loading and headless Main Scene startup passed without script/resource errors.
+
+**Observed four-sword guard coverage** at 0.24 m right / 0.9 m forward: all four valid body contacts were blocked, player HP stayed 100 and three independently detected clashes were recorded (Thrust, Left Cut, final Thrust). Right Cut had no real clash and its matching result was **Limited / Speed-limited approach**. Last observed per-direction matching also included a Thrust Failed/no-safe-pose sample and a Left Cut Matched sample; a pose status at one later sample is not the same as an earlier real clash. Maximum player-hand frame step was approximately **0.050 m / 6°**, within the existing speed limits. The higher-frequency matching limitation is retained; no radius inflation, forced contact event, expanded correction limit or solver refactor was used.
+
+Manual review must judge swing direction, rapid transitions, short rests, recovery, player movement/guard timing and F4 marker readability. In particular inspect Right Cut and late/limited matching. Headless continuity checks do not establish natural animation or input feel. Blocked damage and real blade clashes remain different results. Further stages/steps require approval.
 
 ## Planned Prototype Stages
 
-Stage 0 is not finally accepted. The user accepted static rendering and authorized Stage 1 basic movement and the right-shoulder third-person camera. Those systems are implemented and automatically checked, with manual acceptance pending. Stages 2–6 remain unapproved and unimplemented. This authorization does not include weapon animation or combat.
+Stage 0 has no explicit final acceptance. Stages 1 and 2 and Stage 4 Steps 1–7 passed initial manual acceptance. Stage 3 is temporarily postponed, not cancelled. Step 8 directional bursts is implemented for review; further work remains unapproved. Formal AI, Bind, resources and final contact/combat rules are not established by this test.
 
 | Stage | Minimum scope | Validation gate |
 | --- | --- | --- |
 | Stage 0 — Project Inspection & Design Discussion | Inspection, README, mechanics/scope discussion | Ongoing, without acceptance; documentation is not stage approval |
-| Stage 1 — Greybox Foundation | Static greybox plus camera-relative movement, walk/run toggle, and controllable right-shoulder perspective camera; enemy remains static | Static rendering accepted; movement/camera import, startup, and 56 checks passed. Native input, visual composition, obstruction feel and control feel await manual acceptance |
-| Stage 2 — Weapon Motion | One-handed poses, a few thrusts/cuts, defensive/shooting transitions; extension presentation after approval | Controllable continuous motion and credible muzzle orientation; visuals are not combat resolution |
-| Stage 3 — Visual Effects | Blade material, Glow experiments, trail, contact feedback | Trail follows actual motion independently of detection; clear fast motion; test contact events drive feedback |
-| Stage 4 — Basic Combat Exchange | Limited enemy behavior, spatial/trajectory contact, attack windows, three defenses and resource/guard-break loop | Credible contact, control, depletion-hit absorption then immediate break; Bind core is documented but parameters/contact/animation need design, without automatic scope expansion; no general AI/physical simulation; may overlap Stage 3 |
+| Stage 1 — Greybox Foundation | Static greybox, movement, walk/run and right-shoulder camera; enemy static | Initially manually accepted; walk 2.0/run 3.5 m/s debugging baseline retained |
+| Stage 2 — Weapon Motion | Accepted three motions, selection/transitions, world-space sampling and optional debug lines. Defensive/shooting/extension motions remain future scope | Manual acceptance completed; preserved in contact-check regression |
+| Stage 3 — Visual Effects | Temporarily postponed, not cancelled: Glow experiments, trail, presentation/contact feedback | No formal effects implemented; debug contact crosses are diagnostic only |
+| Stage 4 — Basic Combat Exchange | Steps 1–8: contacts/windows/HP, directional stationary bursts, active defense, blade diagnostics and bounded matching | Steps 1–7 accepted; Step 8 awaiting review. Bind, resources, formal AI and later work remain unapproved |
 | Stage 5 — Contextual Combat | Distance/pose selection, defensive transitions, quick shots; approved exploration of retraction, Force Block, soft targets, disarm/injury | Intent and muzzle fidelity; no guaranteed advantage from retraction/Force Block; Bind/durability and remaining contextual details need planning, not full-system rollout |
 | Stage 6 — Cinematic Presentation | Dynamic composition, shake, slow motion, key moments | Improved presentation while preserving control/readability |
 
@@ -387,7 +633,7 @@ No combat, shooting, dodge, jump, automatic pursuit, tactical extension, Force B
 
 Step 1 uses the coordinate conventions and dimensions recorded above. Hand spacing, visual proportions, and observation-camera distance remain subject to manual acceptance; these are static layout choices, not finalized combat poses.
 
-The authorized movement/camera input subset is now implemented for keyboard/mouse and controller. The broader combat keyboard/mouse scheme still needs separate review. Interaction/jump/climb/dialogue are not implemented. Walk 2 m/s and run 3.5 m/s remain tuning references, with Inspector-adjustable camera parameters; click capture and Esc release are now implemented, pending native-window acceptance.
+The Stage 1 movement/camera subset has passed initial manual acceptance with walk 2.0/run 3.5 m/s as the adjustable debugging baseline. Stage 2 demo inputs are documented separately above. The broader combat keyboard/mouse scheme still needs review; interaction/jump/climb/dialogue remain unimplemented.
 
 Future sequence: static arena/actor/weapon and coordinate check → movement/collision → follow camera → main scene/minimum input → import/resource/short startup checks → manual proportions/feel review. Logic depends on actor body and explicit visual nodes, not a required future skeleton.
 
@@ -397,7 +643,7 @@ Future manual acceptance: F5/F6 enters arena; agreed movement matches camera; ac
 
 ## Open Design Questions / Deferred Discussions
 
-Static foundation and basic movement/right-shoulder camera are authorized; further development awaits manual acceptance and new approval. Preserve resolved combat rules while discussing unfinished details; do not implement default answers.
+Stages 1 and 2 and Stage 4 Steps 1–7 are initially accepted. Stage 3 is postponed; Step 8 test bursts are authorized and awaiting review. Further steps need approval. Test timing/pose coverage does not resolve formal AI, full sword alignment, Bind, resources or death design. Future Animation + IK may replace the greybox correction.
 
 ### Six Major Design Areas
 
@@ -449,7 +695,7 @@ These areas are partly resolved, not finished systems. Keyboard/mouse still requ
 
 ## Development & Testing Instructions
 
-Current scope is Stage 1 static foundation plus basic movement and the right-shoulder camera, with only their required Input Map and smoke tests. No combat, jump, soft lock, weapon animation, Curve resource, or commit is included. Stage 0 final acceptance and Stage 2 approval are not implied.
+Current scope includes accepted player controls/attacks and Stage 4 Steps 1–8 contacts/windows, HP, stationary directional bursts, defense/motion, real-clash diagnostics and bounded hand matching. Enemy incoming damage is 5 HP per valid request. F4 is debug feedback. No Bind, formal AI, pursuit, resources, instinctive defense, skeleton IK, automatic attack tracking, jump, soft lock, Curve resource or commit is included. Stage 3 is postponed; further work is not authorized.
 
 Previously verified engine: `E:\SteamLibrary\steamapps\common\Godot Engine\godot.windows.opt.tools.64.exe`. Use the appropriate local path elsewhere. Only the recorded 4.7.2 build was checked; other versions/export platforms were not validated. `godot` was not on PATH.
 
@@ -469,7 +715,7 @@ Step 1 startup check:
 & $godotExe --headless --path . --quit-after 8 --log-file .godot/step1-startup.log
 ```
 
-Current movement/camera verification commands (the smoke test now exists):
+Current movement/camera and visual weapon-motion verification commands:
 
 ```powershell
 & $godotExe --headless --path . --editor --import --quit
@@ -481,4 +727,4 @@ Short headless runs detect resource/script/runtime errors. Inspect output/logs, 
 
 In future development, version scenes/scripts/assets and required import descriptions/UID files; exclude `.godot/` caches/logs. Keep implementation/stage status accurate instead of presenting plans as completed work.
 
-The authorized foundation, basic movement and shoulder camera are implemented and automatically checked; new controls/visuals await manual acceptance. Stage 0 is not finally accepted. Stop here: Stage 2, weapon animation, and combat require separate authorization.
+Player attacks, speed/locks, camera, HP maximum and defense remain. Stage 4 Steps 1–7 are accepted; Step 8 replaces enemy pacing with directional bursts and 5 HP incoming damage for review. Stage 3 remains postponed, not cancelled. Stop here: further work requires separate authorization. No commit is created.

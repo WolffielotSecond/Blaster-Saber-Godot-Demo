@@ -1,8 +1,21 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/actors/greybox_actor.tscn" id="1_actor"]
 [ext_resource type="Script" path="res://scripts/player_controller.gd" id="2_player"]
 [ext_resource type="PackedScene" path="res://scenes/camera/third_person_rig.tscn" id="3_camera"]
+[ext_resource type="Script" path="res://scripts/weapon_motion_demo.gd" id="4_motion"]
+[ext_resource type="Script" path="res://scripts/weapon_trajectory_debug.gd" id="5_trajectory"]
+[ext_resource type="Script" path="res://scripts/weapon_contact_debug.gd" id="6_contact"]
+[ext_resource type="Script" path="res://scripts/static_enemy_health.gd" id="7_health"]
+[ext_resource type="Script" path="res://scripts/debug_enemy_attack.gd" id="8_enemy_attack"]
+[ext_resource type="Script" path="res://scripts/debug_player_health.gd" id="9_player_health"]
+[ext_resource type="Script" path="res://scripts/debug_player_defense.gd" id="10_defense"]
+[ext_resource type="Script" path="res://scripts/blade_clash_debug.gd" id="11_clash"]
+[ext_resource type="Script" path="res://scripts/debug_contact_matching.gd" id="12_matching"]
+
+[sub_resource type="CylinderShape3D" id="DebugContactCylinder"]
+radius = 0.25
+height = 1.7
 
 [sub_resource type="StandardMaterial3D" id="GroundMaterial"]
 albedo_color = Color(0.14, 0.18, 0.23, 1)
@@ -36,7 +49,7 @@ ambient_light_energy = 0.65
 tonemap_mode = 0
 
 [node name="TestArena" type="Node3D"]
-metadata/step = "Stage 1: basic movement and right-shoulder camera only. No combat."
+metadata/step = "Stage 4 Step 8: predictable stationary directional bursts, 5 HP enemy hits. Stage 3 deferred. No formal AI/Bind/resources."
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment")
@@ -174,9 +187,47 @@ position = Vector3(0, 0, 1.5)
 script = ExtResource("2_player")
 metadata/coordinate_convention = "Feet Y=0; height 1.7 m; forward -Z; camera-relative movement."
 
+[node name="WeaponMotionDemo" type="Node3D" parent="Player"]
+process_physics_priority = 5
+script = ExtResource("4_motion")
+
+[node name="DebugPlayerHealth" type="Node" parent="Player"]
+script = ExtResource("9_player_health")
+
+[node name="DebugDefense" type="Node" parent="Player"]
+process_physics_priority = -10
+script = ExtResource("10_defense")
+
+[node name="ContactMatchingDebug" type="Node" parent="Player"]
+script = ExtResource("12_matching")
+
+[node name="DebugContactRegion" type="Area3D" parent="Player"]
+position = Vector3(0, 0.85, 0)
+collision_layer = 4
+collision_mask = 0
+monitoring = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player/DebugContactRegion"]
+shape = SubResource("DebugContactCylinder")
+
 [node name="Enemy" parent="." instance=ExtResource("1_actor")]
 position = Vector3(0, 0, -1.5)
 rotation = Vector3(0, 3.14159265359, 0)
+
+[node name="DebugHealth" type="Node" parent="Enemy"]
+script = ExtResource("7_health")
+
+[node name="DebugAttack" type="Node3D" parent="Enemy"]
+script = ExtResource("8_enemy_attack")
+
+[node name="DebugContactRegion" type="Area3D" parent="Enemy"]
+position = Vector3(0, 0.85, 0)
+collision_layer = 2
+collision_mask = 0
+monitoring = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Enemy/DebugContactRegion"]
+shape = SubResource("DebugContactCylinder")
 
 [node name="References" type="Node3D" parent="."]
 
@@ -232,3 +283,13 @@ modulate = Color(0.2, 0.65, 1, 1)
 
 [node name="ThirdPersonRig" parent="." instance=ExtResource("3_camera")]
 position = Vector3(0, 1.55, 1.5)
+
+[node name="WeaponTrajectoryDebug" type="Node3D" parent="."]
+process_physics_priority = 30
+script = ExtResource("5_trajectory")
+
+[node name="WeaponContactDebug" type="Node3D" parent="."]
+script = ExtResource("6_contact")
+
+[node name="BladeClashDebug" type="Node" parent="."]
+script = ExtResource("11_clash")
