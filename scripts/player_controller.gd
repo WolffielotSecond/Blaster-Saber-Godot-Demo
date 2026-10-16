@@ -33,6 +33,14 @@ func _physics_process(delta: float) -> void:
 	# Face realized motion, including collision sliding, instead of just requested input.
 	var actual_motion := get_real_velocity()
 	actual_motion.y = 0.0
+	var rig: Node3D = movement_camera.get_parent().get_parent().get_parent()
+	if rig.is_locked():
+		var to_target: Vector3 = rig.lock_point() - global_position
+		to_target.y = 0
+		if to_target.length_squared() > 0.0001:
+			var heading := atan2(-to_target.x, -to_target.z)
+			rotation.y = lerp_angle(rotation.y, heading, 1.0 - exp(-rig.lock_character_turn_speed * delta))
+		return
 	if actual_motion.length_squared() > 0.0001:
 		var heading := atan2(-actual_motion.x, -actual_motion.z)
 		var weight := 1.0 if turn_smoothing <= 0.0 else 1.0 - exp(-turn_smoothing * delta)

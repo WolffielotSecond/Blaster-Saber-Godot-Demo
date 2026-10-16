@@ -10,6 +10,10 @@ var events: Array[Dictionary] = []
 var records: Array[Dictionary] = []
 var previous: Dictionary = {}
 var capped_segments: int = 0
+var generation: int = 0
+var player_latest: Dictionary = {}
+var player_previous: Dictionary = {}
+var player_records: Array[Dictionary] = []
 @onready var attack: Node3D = get_node("../Enemy/DebugAttack")
 @onready var player_weapon: Node3D = get_node("../Player/VisualRoot/RightHand/Gunblade")
 @onready var enemy_weapon: Node3D = get_node("../Enemy/VisualRoot/RightHand/Gunblade")
@@ -19,6 +23,38 @@ func _ready() -> void:
 	attack.attack_started.connect(_start)
 	attack.detector.contact_detected.connect(_on_body)
 	attack.detector.valid_attack_contact_detected.connect(_on_valid_body)
+	get_node("../Player/WeaponMotionDemo").motion_started.connect(_start_player)
+	get_node("../Player/WeaponMotionDemo").motion_ended.connect(_end_player)
+	get_node("../WeaponTrajectoryDebug").sample_recorded.connect(_sample_player)
+	clash_detected.connect(get_node("../Enemy/DebugDefense")._on_clash)
+
+func _start_player(id: int, motion: int) -> void:
+	player_latest = {"request_id": id, "motion": motion, "blade_contact": false, "end_frame": 0}
+	player_records.append(player_latest)
+	if player_records.size() > 32: player_records.pop_front()
+	player_previous = pair_pose()
+
+func _end_player(id: int, _reason: String) -> void:
+	if player_latest.get("request_id", 0) == id:
+		player_latest["end_frame"] = Engine.get_physics_frames()
+
+func _sample_player(id: int, _motion: int, _sample: Dictionary) -> void:
+	if player_latest.get("request_id", 0) != id or player_previous.is_empty(): return
+	var epoch := generation
+	get_node("../Enemy/DebugDefense").update_matching()
+	var current := pair_pose()
+	if get_node("../Enemy/DebugDefense").guarding and not player_latest["blade_contact"]:
+		var hit := sweep_pair(player_previous, current)
+		if not hit.is_empty():
+			player_latest["blade_contact"] = true
+			var event := {"request_id": id, "generation": generation, "detector": self,
+				"kind": "blade_clash", "attack_side": "Player", "position": hit["position"],
+				"physics_frame": Engine.get_physics_frames(), "fraction": hit["fraction"], "motion": _motion}
+			events.append(event)
+			if events.size() > 32: events.pop_front()
+			clash_detected.emit(event)
+			if epoch != generation: return
+	player_previous = current
 
 func pose(weapon: Node3D) -> Dictionary:
 	return {"base": weapon.get_node("BladeBase").global_position,
@@ -38,6 +74,7 @@ func _start(id: int) -> void:
 	sample_attack(id)
 
 func sample_attack(id: int) -> void:
+	var epoch := generation
 	if latest.is_empty() or latest["request_id"] != id:
 		return
 	var current := pair_pose()
@@ -45,12 +82,13 @@ func sample_attack(id: int) -> void:
 		var hit := sweep_pair(previous, current)
 		if not hit.is_empty():
 			latest["blade_contact"] = true
-			var event := {"request_id": id, "kind": "blade_clash", "position": hit["position"],
+			var event := {"request_id": id, "generation": generation, "detector": self, "kind": "blade_clash", "position": hit["position"],
 				"physics_frame": Engine.get_physics_frames(), "fraction": hit["fraction"], "defense": defense.state_name()}
 			events.append(event)
 			if events.size() > 32:
 				events.pop_front()
 			clash_detected.emit(event)
+			if epoch != generation: return
 	previous = current
 
 func _on_body(event: Dictionary) -> void:
@@ -60,9 +98,13 @@ func _on_body(event: Dictionary) -> void:
 
 func _on_valid_body(event: Dictionary) -> void:
 	if not latest.is_empty() and latest["request_id"] == event["request_id"]:
+		var health: Node = get_node("../Player/DebugPlayerHealth")
+		var settlement = health.damaged_requests.get(event["request_id"], {})
+		if not settlement is Dictionary or settlement.is_empty(): return
 		latest["valid_body_contact"] = true
-		latest["defense_on_body_contact"] = defense.state_name()
-		latest["damage_prevented"] = "YES" if defense.last_result in ["Perfect Parry", "Block"] else "NO"
+		var result: String = settlement["result"]
+		latest["defense_on_body_contact"] = "Held Guard" if result == "Block" else (result if result in ["Perfect Parry", "Instinctive Defense"] else "None")
+		latest["damage_prevented"] = "NO" if result == "Damage" else "YES"
 
 func sweep_pair(from: Dictionary, to: Dictionary) -> Dictionary:
 	var travel := _travel(from["player"], to["player"]) + _travel(from["enemy"], to["enemy"])
@@ -99,7 +141,11 @@ func _interpolate(a: Dictionary, b: Dictionary, t: float) -> Dictionary:
 	return {"base": base, "tip": base + Basis(rotation).y * lerpf(base_a.distance_to(tip_a), base_b.distance_to(tip_b), t)}
 
 func debug_reset() -> void:
+	generation += 1
 	latest = {}
 	previous = {}
 	events.clear()
 	records.clear()
+	player_latest.clear()
+	player_previous.clear()
+	player_records.clear()

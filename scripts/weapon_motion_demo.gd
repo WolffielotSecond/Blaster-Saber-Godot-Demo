@@ -30,6 +30,7 @@ var last_motion: Motion = Motion.THRUST
 var accepted_request_count: int = 0 # Debug observation only, not a combo counter.
 var active_request_id: int = 0
 var window_live: bool = false
+var ending_record: bool = false
 @onready var right_hand: Node3D = get_node(right_hand_path) as Node3D
 @onready var actor: Node3D = get_parent() as Node3D
 @onready var reference_target: Node3D = get_node_or_null(reference_target_path) as Node3D
@@ -85,7 +86,7 @@ func choose_motion() -> Motion:
 func request_motion(motion: Motion) -> bool:
 	var defense: Node = actor.get_node("DebugDefense")
 	defense.refresh_input()
-	if defense.held:
+	if not defense.attack_allowed():
 		return false
 	if actor.get_node("DebugPlayerHealth").dead or lock_remaining > 0.0:
 		return false
@@ -129,9 +130,12 @@ func cancel_debug_motion(reason: String, preserve_lock: bool = false) -> void:
 
 func _end_motion_record(reason: String) -> void:
 	window_live = false
-	if active_request_id != 0:
-		motion_ended.emit(active_request_id, reason)
-		active_request_id = 0
+	if active_request_id != 0 and not ending_record:
+		var closing_id := active_request_id
+		ending_record = true
+		motion_ended.emit(closing_id, reason)
+		if active_request_id == closing_id: active_request_id = 0
+		ending_record = false
 
 func playback_state() -> Dictionary:
 	var strike_end: float = [0.26, 0.24, 0.52][last_motion]

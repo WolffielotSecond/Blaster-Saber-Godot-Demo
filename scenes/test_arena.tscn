@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/actors/greybox_actor.tscn" id="1_actor"]
 [ext_resource type="Script" path="res://scripts/player_controller.gd" id="2_player"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://scripts/debug_player_defense.gd" id="10_defense"]
 [ext_resource type="Script" path="res://scripts/blade_clash_debug.gd" id="11_clash"]
 [ext_resource type="Script" path="res://scripts/debug_contact_matching.gd" id="12_matching"]
+[ext_resource type="Script" path="res://scripts/debug_enemy_defense.gd" id="13_enemy_defense"]
 
 [sub_resource type="CylinderShape3D" id="DebugContactCylinder"]
 radius = 0.25
@@ -49,7 +50,7 @@ ambient_light_energy = 0.65
 tonemap_mode = 0
 
 [node name="TestArena" type="Node3D"]
-metadata/step = "Stage 4 Step 8: predictable stationary directional bursts, 5 HP enemy hits. Stage 3 deferred. No formal AI/Bind/resources."
+metadata/step = "Stage 4 Step 9: single player defense resource and timed Guard Break. Stage 3 deferred. No instinctive defense/enemy resources/Bind."
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment")
@@ -219,6 +220,9 @@ script = ExtResource("7_health")
 
 [node name="DebugAttack" type="Node3D" parent="Enemy"]
 script = ExtResource("8_enemy_attack")
+
+[node name="DebugDefense" type="Node" parent="Enemy"]
+script = ExtResource("13_enemy_defense")
 
 [node name="DebugContactRegion" type="Area3D" parent="Enemy"]
 position = Vector3(0, 0.85, 0)

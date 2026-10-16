@@ -48,6 +48,7 @@ func _ready() -> void:
 	cooldown = sequence_recovery_seconds
 
 func _physics_process(delta: float) -> void:
+	if _guard_owns_hand(): return
 	if not enabled or health.dead or player.get_node("DebugPlayerHealth").dead:
 		cancel_attack()
 		return
@@ -69,6 +70,7 @@ func _physics_process(delta: float) -> void:
 		call_deferred("_sample_attack", active_request_id)
 
 func start_sequence() -> bool:
+	if _guard_owns_hand(): return false
 	if sequence_active or active_request_id != 0 or not enabled or health.dead or player.get_node("DebugPlayerHealth").dead or enemy.global_position.distance_to(player.global_position) > attack_distance:
 		return false
 	sequence_active = true
@@ -83,6 +85,7 @@ func _start_next() -> void:
 	start_attack(next_motion)
 
 func start_attack(requested_motion: int = Motion.THRUST) -> bool:
+	if _guard_owns_hand(): return false
 	if not enabled or health.dead or player.get_node("DebugPlayerHealth").dead or active_request_id != 0:
 		return false
 	accepted_request_count += 1
@@ -155,14 +158,18 @@ func _finish_sequence() -> void:
 	tween = create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
 	tween.tween_property(hand, "transform", idle, 0.25).set_trans(Tween.TRANS_SINE)
 
-func cancel_attack() -> void:
+func _guard_owns_hand() -> bool:
+	var guard := get_node_or_null("../DebugDefense")
+	return guard != null and guard.owns_hand
+
+func cancel_attack(preserve_pose: bool = false) -> void:
 	active_request_id = 0
 	sequence_active = false
 	sequence_index = 0
 	if tween != null and tween.is_valid():
 		tween.kill()
 	cooldown = sequence_recovery_seconds
-	if is_instance_valid(hand):
+	if is_instance_valid(hand) and not preserve_pose:
 		hand.transform = idle
 
 func _pose(position: Vector3, degrees: Vector3) -> Transform3D:

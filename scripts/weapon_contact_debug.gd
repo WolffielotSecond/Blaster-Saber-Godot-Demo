@@ -20,6 +20,7 @@ var current_request_id: int = 0
 var current_request_contacted: bool = false
 var previous_sample: Dictionary = {}
 var oversized_segments: int = 0
+var generation: int = 0
 var blade_shape := CapsuleShape3D.new()
 @onready var region: Area3D = get_node(target_region_path) as Area3D
 @onready var target: Node3D = region.get_parent() as Node3D
@@ -29,6 +30,7 @@ func _ready() -> void:
 		get_node(trajectory_path).sample_recorded.connect(_on_sample)
 
 func _on_sample(request_id: int, motion: int, sample: Dictionary) -> void:
+	var epoch := generation
 	if request_id != current_request_id:
 		current_request_id = request_id
 		current_request_contacted = false
@@ -45,6 +47,7 @@ func _on_sample(request_id: int, motion: int, sample: Dictionary) -> void:
 			if events.size() > 32:
 				events.pop_front()
 			contact_detected.emit(event)
+			if epoch != generation: return
 			print("WEAPON_CONTACT ", event)
 	if not current_request_valid_contacted:
 		var contact := sweep_active_interval(from, sample)
@@ -59,11 +62,20 @@ func _on_sample(request_id: int, motion: int, sample: Dictionary) -> void:
 			print("VALID_ATTACK_CONTACT ", event)
 
 func _event(request_id: int, motion: int, sample: Dictionary, contact: Dictionary, kind: String) -> Dictionary:
-	var event := {"request_id": request_id, "motion": motion,
+	var event := {"request_id": request_id, "motion": motion, "generation": generation, "detector": self,
 		"motion_name": motion_names[motion],
 		"target": target, "target_path": str(target.get_path()),
 		"position": contact["point"], "physics_frame": sample["frame"], "normal": contact["normal"], "contact_kind": kind}
 	return event
+
+func debug_reset_contacts() -> void:
+	generation += 1
+	current_request_id = 0
+	current_request_contacted = false
+	current_request_valid_contacted = false
+	previous_sample = {}
+	events.clear()
+	valid_events.clear()
 
 func sweep_active_interval(from: Dictionary, to: Dictionary) -> Dictionary:
 	if not to.has("playback_time"):

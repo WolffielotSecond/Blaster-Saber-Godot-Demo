@@ -19,6 +19,7 @@ var baseline: Transform3D
 var previous_enemy_tip := Vector3.ZERO
 var hold_remaining: float = 0
 var completed_request: int = 0
+var last_update_frame: int = -1
 var base_offset := Vector3.ZERO
 var tip_offset := Vector3.ZERO
 @onready var player: Node3D = get_parent()
@@ -37,24 +38,28 @@ func _physics_process(_delta: float) -> void:
 	call_deferred("_finish_if_inactive")
 
 func _finish_if_inactive() -> void:
-	if active and (attack.active_request_id == 0 or not defense.held or player.get_node("DebugPlayerHealth").dead):
+	if active and (attack.active_request_id == 0 or not defense.matching_defense_active() or player.get_node("DebugPlayerHealth").dead):
 		_finish()
 
 func _finish() -> void:
 	active = false
 	if defense.held and not player.get_node("DebugPlayerHealth").dead:
-		defense._stop_visual()
+		defense.claim_hand("Guard")
 		defense.visual_tween = defense.create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
 		defense.visual_tween.tween_property(hand, "transform", defense.demo._pose(defense.guard_position, defense.guard_rotation_degrees), recovery_seconds).set_trans(Tween.TRANS_SINE)
 
 func _on_clash(event: Dictionary) -> void:
-	if active and event["request_id"] == request_id:
+	if active and event.get("attack_side", "Enemy") == "Enemy" and event["request_id"] == request_id:
 		hold_remaining = contact_hold_seconds
 		completed_request = request_id
 
 func update_matching(id: int, delta: float) -> void:
+	var frame := Engine.get_physics_frames()
 	defense.refresh_input()
-	if not enabled or not defense.held or player.get_node("DebugPlayerHealth").dead:
+	if not defense.held and defense.instinctive_request_id != id:
+		if active: _finish()
+		return # Automatic matching belongs only to its confirmed incoming request.
+	if not enabled or not defense.matching_defense_active() or player.get_node("DebugPlayerHealth").dead:
 		if active: _finish()
 		return
 	var offset: Vector3 = attack.get_parent().global_position - player.global_position
@@ -65,9 +70,12 @@ func update_matching(id: int, delta: float) -> void:
 		reason = "Outside front defense cone"
 		return
 	var window: Vector2 = attack.get_active_window()
-	if attack.previous_time < window.x or attack.previous_time >= window.y:
+	var instinctive_intercept: bool = defense.instinctive_phase == "Intercept" and defense.instinctive_request_id == id
+	if not instinctive_intercept and (attack.previous_time < window.x or attack.previous_time >= window.y):
 		if active: _finish()
 		return
+	if last_update_frame == frame: return
+	last_update_frame = frame
 	if completed_request == id:
 		hold_remaining = maxf(0, hold_remaining - delta)
 		if hold_remaining == 0 and active: _finish()
@@ -75,7 +83,7 @@ func update_matching(id: int, delta: float) -> void:
 	if not active or request_id != id:
 		request_id = id
 		baseline = hand.transform
-		defense._stop_visual()
+		defense.claim_hand("Matching")
 		active = true
 		previous_enemy_tip = enemy_weapon.get_node("BladeTip").global_position
 	var enemy_base: Vector3 = enemy_weapon.get_node("BladeBase").global_position
@@ -107,6 +115,13 @@ func update_matching(id: int, delta: float) -> void:
 	reason = "Pose converged; clash detection remains independent" if result == "Matched" else "Speed-limited approach"
 
 func solve_pose(enemy_base: Vector3, enemy_tip: Vector3) -> Dictionary:
+	return solve_contact_pose(hand, weapon, baseline, base_offset, tip_offset, observed_direction,
+		max_position_correction, max_rotation_degrees, enemy_base, enemy_tip)
+
+static func solve_contact_pose(hand: Node3D, weapon: Node3D, baseline: Transform3D,
+	base_offset: Vector3, tip_offset: Vector3, observed_direction: Vector3,
+	max_position_correction: float, max_rotation_degrees: float,
+	enemy_base: Vector3, enemy_tip: Vector3) -> Dictionary:
 	var base_local: Vector3 = hand.global_transform.affine_inverse() * weapon.get_node("BladeBase").global_position
 	var tip_local: Vector3 = hand.global_transform.affine_inverse() * weapon.get_node("BladeTip").global_position
 	var best: Dictionary = {}
@@ -127,7 +142,7 @@ func solve_pose(enemy_base: Vector3, enemy_tip: Vector3) -> Dictionary:
 					basis = Basis(Quaternion.IDENTITY.slerp(rotation, amount)) * basis
 				var pose := Transform3D(basis, local_target - basis * blade_point)
 				var distance := pose.origin.distance_to(baseline.origin)
-				if distance > max_position_correction or not _safe(pose): continue
+				if distance > max_position_correction or not safe_contact_pose(pose, base_offset, tip_offset): continue
 				var motion_local: Vector3 = hand.get_parent().global_basis.inverse() * observed_direction
 				var cost := distance + baseline.basis.get_rotation_quaternion().angle_to(basis.get_rotation_quaternion()) * 0.05 + absf(basis.y.dot(motion_local)) * 0.02
 				if cost < score:
@@ -136,10 +151,14 @@ func solve_pose(enemy_base: Vector3, enemy_tip: Vector3) -> Dictionary:
 	return best
 
 func _safe(pose: Transform3D) -> bool:
+	return safe_contact_pose(pose, base_offset, tip_offset)
+
+static func safe_contact_pose(pose: Transform3D, base_offset: Vector3, tip_offset: Vector3) -> bool:
 	# Entire blade and grip must stay forward of the existing cylindrical body.
 	return pose.origin.z <= -0.28 and pose.origin.y >= 0.8 and pose.origin.y <= 1.75 and (pose * base_offset).z <= -0.28 and (pose * tip_offset).z <= -0.28
 
 func debug_reset() -> void:
+	last_update_frame = -1
 	active = false
 	request_id = 0
 	completed_request = 0

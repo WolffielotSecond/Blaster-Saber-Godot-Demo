@@ -63,12 +63,13 @@ func _ready() -> void:
 	clash.body_contact_detected.connect(_on_enemy_body)
 
 func _on_clash(event: Dictionary) -> void:
-	_contact_marker(event, "blade_clash")
+	_contact_marker(event, "enemy_guard_clash" if event.get("attack_side", "Enemy") == "Player" else "blade_clash")
 
 func _on_enemy_body(event: Dictionary) -> void:
 	_contact_marker(event, "enemy_body")
 
 func _contact_marker(event: Dictionary, key: String) -> void:
+	if event.has("detector") and event["generation"] != event["detector"].generation: return
 	contact_markers.append({"position": event["position"], "kind": key,
 		"expires": Engine.get_physics_frames() + ceili(contact_marker_seconds * Engine.physics_ticks_per_second)})
 	if contact_markers.size() > 32:
@@ -81,6 +82,7 @@ func _on_valid_contact(event: Dictionary) -> void:
 	_store_contact(event, "valid_contact")
 
 func _store_contact(event: Dictionary, key: String) -> void:
+	if event.has("detector") and event["generation"] != event["detector"].generation: return
 	for record in records:
 		if record["id"] == event["request_id"]:
 			record[key] = event
@@ -166,6 +168,7 @@ func _redraw() -> void:
 		var valid: bool = marker["kind"] == "valid_contact"
 		var color := Color.LIME if valid else Color(1, 0.15, 0.4)
 		if marker["kind"] == "blade_clash": color = Color.DEEP_SKY_BLUE
+		if marker["kind"] == "enemy_guard_clash": color = Color.GOLD
 		if marker["kind"] == "enemy_body": color = Color.ORANGE_RED
 		_cross(marker["position"], 0.14 if valid else 0.10, color)
 	var enemy_pose: Dictionary = clash.pose(clash.enemy_weapon)
@@ -205,6 +208,49 @@ func _redraw() -> void:
 	legend.text += "\nEnemy burst: %s | sword %d / %d | %s | recovery/gap %.2f s" % [
 		str(enemy_attack.sequence_active), enemy_attack.sequence_index, enemy_attack.sequence_length,
 		["Thrust", "Left Cut", "Right Cut"][enemy_attack.motion], enemy_attack.cooldown]
+	legend.text += "\nResource: %.1f / %.1f | Last block cost: %.1f | Guard Break: %s (%.2f s)\nRecovery: %s | delay elapsed %.2f s" % [
+		defense.resource, defense.max_resource, defense.last_resource_cost, str(defense.guard_break_remaining > 0),
+		defense.guard_break_remaining, defense.recovery_state, defense.recovery_elapsed]
+	legend.text += "\nCombat state: %s | Attack allowed: %s | Defense allowed: %s | Break request: %d" % [
+		defense.combat_state_name(), str(defense.attack_allowed()), str(defense.defense_allowed()), defense.last_break_request_id]
+	legend.text += "\nInstinctive Defense: %s | request %d | cost %.1f | action %s\nInstinctive reason: %s" % [
+		str(defense.last_instinctive_triggered), defense.instinctive_request_id, defense.last_instinctive_cost,
+		defense.instinctive_phase, defense.instinctive_reason]
+	legend.text += "\nInstinctive real Blade Clash: %s" % str(not clash.latest.is_empty() and clash.latest["request_id"] == defense.instinctive_request_id and clash.latest["blade_contact"])
+	var settlement: Dictionary = player_health.last_settlement
+	legend.text += "\nFinal: %s | request %d | hand owner: %s" % [settlement.get("result", "None"), settlement.get("request_id", 0), defense.pose_owner]
+	var rig: Node3D = get_node("../ThirdPersonRig")
+	var locked: bool = rig.is_locked()
+	var distance := 0.0
+	var angle := 0.0
+	if locked:
+		var offset: Vector3 = rig.lock_point() - player_health.player.global_position
+		distance = offset.length()
+		offset.y = 0
+		if offset.length_squared() > 0.000001:
+			angle = rad_to_deg(acos(clampf((-player_health.player.global_basis.z).dot(offset.normalized()), -1, 1)))
+	legend.text += "\nSoft Lock: %s | target %s | %.2f m | yaw error %.1f deg | camera follow: %s" % [
+		str(locked), str(rig.locked_target.name) if locked else "None", distance, angle, str(locked)]
+	legend.text += "\nMode: %s | view offset %.1f deg | overrun %.2f s | release: %s" % [
+		rig.mode_name(), rig.horizontal_deviation(), rig.overrun_elapsed, rig.last_unlock_reason]
+	legend.text += " | event: %s" % rig.last_lock_event
+	if rig.mode != rig.Mode.SOFT_LOCK:
+		legend.text += "\nReacquire: camera %.1f/%.1f (%s) | move %.1f/%.1f (%s) | armed: %s" % [
+			rig.reacquire_camera_angle, rig.reacquire_camera_degrees, str(rig.camera_condition),
+			rig.reacquire_movement_angle, rig.reacquire_movement_degrees, str(rig.movement_condition), str(rig.reacquire_armed)]
+	legend.text += "\nHeld cost: %.0f | Player damage: %.0f" % [defense.held_guard_cost, get_node("../Enemy/DebugHealth").test_damage]
+	var enemy_guard: Node = get_node("../Enemy/DebugDefense")
+	legend.text += "\nKP 0 Enemy Guard: %s | toggle: %s | #%d %s | front: %s | damage: %.0f" % [
+		enemy_guard.state_name(), enemy_guard.last_toggle_result, enemy_guard.last_request_id,
+		enemy_guard.last_result, str(enemy_guard.last_front), enemy_health.last_damage]
+	legend.text += "\nPlayer swing actual Blade Clash: %s (gold marker; independent of guard)" % str(clash.player_latest.get("blade_contact", false))
+	legend.text += "\nEnemy Matching: %s / %s | %.3f m / %.1f deg | %s" % [str(enemy_guard.matching_active), enemy_guard.matching_result, enemy_guard.matching_position_correction, enemy_guard.matching_rotation_correction, enemy_guard.matching_reason]
+	legend.text += "\nEnemy Defense: %s / %s | #%d %s | reaction %.2f/%.2f s | hold %.2f s | %s" % [
+		enemy_guard.defense_mode(), enemy_guard.ai_state, enemy_guard.recognized_request_id, enemy_guard.recognized_motion_name(), enemy_guard.reaction_elapsed, enemy_guard.reaction_delay, enemy_guard.guard_hold_remaining, enemy_guard.ai_reason]
+	legend.text += "\nPressure: %d | chance %.0f%% | last #%d roll %.3f / %.0f%% (%s, stacks %d)" % [
+		enemy_guard.pressure_stacks, enemy_guard.current_mistake_chance() * 100, enemy_guard.last_mistake_request_id,
+		enemy_guard.last_mistake_roll, enemy_guard.last_mistake_chance * 100, "Mistake" if enemy_guard.last_mistake else "No Mistake", enemy_guard.last_mistake_pressure]
+	legend.text += "\nBreathing eligible: %s | %.2f/%.2f s | %s" % [str(enemy_guard.breathing_eligible), enemy_guard.breathing_elapsed, enemy_guard.breathing_duration, enemy_guard.last_pressure_reason]
 
 func _segment(a: Vector3, b: Vector3, color: Color) -> void:
 	line_mesh.surface_set_color(color)
